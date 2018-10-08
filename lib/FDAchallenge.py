@@ -32,12 +32,9 @@ sum(matching["mismatch"])
 #for now impute by mean per row (patient) 
 #as mean by column (protein) yields entire NAN columns -> worth thr try anyway as feature selection
 training=training.T.fillna(training.mean(axis=1)).T
-
-#remove mismatches for now
-indices = np.where(matching["mismatch"]==0)[0]
-misMatcInd = np.where(matching["mismatch"]==1)[0]
-trainingNoMismatch = training.iloc[indices,:]
-labelsNoMismatch = labels.iloc[indices,:]
+#add sex and disease as features
+training.loc[:,'gender']=labels.iloc[:,1].values
+training.loc[:,'msi']=labels.iloc[:,2].values
 
 #More exploration for data imputation
 #distribution of proteins by sex
@@ -48,29 +45,25 @@ labelsNoMismatch = labels.iloc[indices,:]
 #Optimize hyperparameters
 
 #feature selection though stability selection
-#trainingNoMismatch.loc[:,'add']=labelsNoMismatch.iloc[:,1].values
-#random.seed(1)
-classToPredict=1#could be 1 or 2
-if classToPredict==1:#sex
-    nFeatures=30
-elif classToPredict==2:#disease
-    nFeatures=20
-rlasso = RandomizedLasso(alpha=0.025,n_resampling=3000)#need high resampling to
-rlasso.fit(trainingNoMismatch, labelsNoMismatch.iloc[:,classToPredict])#predict sex 1 disease 2
-names=list(trainingNoMismatch)
+nFeatures=20
+rlasso = RandomizedLasso(alpha=0.01, sample_fraction=0.75, n_resampling=3000)#need high resampling to
+rlasso.fit(training, matching.iloc[:,1])
+names=list(training)
 #print "Features sorted by their score:"
 #print sorted(zip(map(lambda x: round(x, 4), rlasso.scores_), names), reverse=True)
 vecSort=sorted(zip(map(lambda x: round(x, 4), rlasso.scores_), names), reverse=True)
 colNameVecSort=[x[1] for x in vecSort]
-selFeatures=colNameVecSort[1:nFeatures]#select 30 features
+selFeatures=colNameVecSort[0:nFeatures]#select 30 features
+print vecSort[0]
 
 #learn and cross validate : target is gender
 clf = ExtraTreesClassifier(n_estimators=10, max_depth=None, min_samples_split=2, random_state=0, class_weight="balanced") 
-scores = cross_val_score(clf, trainingNoMismatch.loc[:,selFeatures], labelsNoMismatch.iloc[:,classToPredict], cv=5)
+clf.fit(training.loc[:,selFeatures], matching)
+scores = cross_val_score(clf, training.loc[:,selFeatures], matching.iloc[:,1], cv=5)
 print scores.mean()
-clf.fit(trainingNoMismatch.loc[:,selFeatures], labelsNoMismatch.iloc[:,classToPredict])
-y=clf.predict(training.iloc[misMatcInd,:].loc[:,selFeatures])   
-y==labels.iloc[misMatcInd,classToPredict]
+
+#y=clf.predict(training.iloc[misMatcInd,:].loc[:,selFeatures])   
+#y==labels.iloc[misMatcInd,classToPredict]
 
 #disease
 '''
