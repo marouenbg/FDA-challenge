@@ -7,6 +7,8 @@ import os
 from sklearn.model_selection import cross_val_score #cross validation
 from sklearn.feature_selection import SelectFromModel #select top features
 from xgboost import XGBClassifier #for xgboost
+from sklearn.ensemble import RandomForestClassifier #random forest
+from sklearn.model_selection import train_test_split #test set
 
 #change working directory
 os.chdir('/home/marouen/challenges/FDA/data')
@@ -22,8 +24,12 @@ print(labels.groupby(['gender']).size())
 print(labels.groupby(['msi']).size())
 
 #Encode sex and MSI
-labels['gender'].replace(['Female','Male'],[1,0], inplace=True)
+labels['gender'].replace(['Female','Male'],[0,1], inplace=True)
 labels['msi'].replace(['MSI-Low/MSS','MSI-High'],[0,1], inplace=True)
+print(sum(labels[labels['gender'] == 1]['msi'])/sum(labels['gender'] == 1))
+print(sum(labels[labels['gender'] == 0]['msi'])/sum(labels['gender'] == 0))
+print(sum(labels[labels['msi'] == 1]['gender'])/sum(labels['msi'] == 1))
+print(sum(labels[labels['msi'] == 0]['gender'])/sum(labels['msi'] == 0))
 
 #data exploration
 training.max().plot(kind='hist')
@@ -32,11 +38,13 @@ sum(matching["mismatch"])
 
 #for now impute by mean per row (patient) 
 #as mean by column (protein) yields entire NAN columns -> worth thr try anyway as feature selection
-training=training.T.fillna(training.mean(axis=1)).T
+#training=training.T.fillna(training.mean(axis=1)).T
+#normalize
+#training=(training-training.mean())/training.std()
 
 #remove mismatches for now
 indices = np.where(matching["mismatch"]==0)[0]
-misMatcInd = np.where(matching["mismatch"]==1)[0]
+misMatchInd = np.where(matching["mismatch"]==1)[0]
 trainingNoMismatch = training.iloc[indices,:]
 labelsNoMismatch = labels.iloc[indices,:]
 
@@ -48,32 +56,60 @@ labelsNoMismatch = labels.iloc[indices,:]
 #scale + standardize + fill missing
 #Optimize hyperparameters
 
-#feature selection though stability selection
-trainingNoMismatch.loc[:,'add']=labelsNoMismatch.iloc[:,2].values
-#random.seed(1)
-classToPredict=1 #could be 1 (sex) or 2 (msi)
-clf = ExtraTreesClassifier(n_estimators=10, max_depth=None, min_samples_split=2, random_state=0, class_weight="balanced")  #need high resampling to
-clf.fit(trainingNoMismatch, labelsNoMismatch.iloc[:,classToPredict]) #predict sex 1 disease 2
-names=list(trainingNoMismatch)
-#print "Features sorted by their score:"
-#print sorted(zip(map(lambda x: round(x, 4), rlasso.scores_), names), reverse=True)
-vecSort=sorted(zip(map(lambda x: round(x, 4), clf.feature_importances_), names), reverse=True)
-colNameVecSort=[x[1] for x in vecSort]
-#print(colNameVecSort)
+compMat=np.zeros([len(misMatchInd),4])
+compMat[:,2:4]=labels.iloc[misMatchInd,1:3]
+for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
+	if anteClass==1:
+		classToPredict=2
+		nFeat=6
+	elif anteClass==2:
+		classToPredict=1
+		nFeat=6
+	#feature selection though stability selection
+	#trainingNoMismatch['add1']=labelsNoMismatch.iloc[:,anteClass].values
+	#trainingNoMismatch['add2']=1 - labelsNoMismatch.iloc[:,anteClass].values
+	#trainingNoMismatch=(trainingNoMismatch-trainingNoMismatch.mean())/trainingNoMismatch.std()
+	#print(trainingNoMismatch.loc[:,'add1'])
+	#random.seed(1)
+	#classToPredict could be 1 (sex) or 2 (msi)
+	clf = ExtraTreesClassifier(n_estimators=100, class_weight="balanced")  #need high resampling to
+	clf.fit(trainingNoMismatch, labelsNoMismatch.iloc[:,classToPredict]) #predict sex 1 disease 2
+	names=list(trainingNoMismatch)
+	#print "Features sorted by their score:"
+	#print sorted(zip(map(lambda x: round(x, 4), rlasso.scores_), names), reverse=True)
+	vecSort=sorted(zip(map(lambda x: round(x, 4), clf.feature_importances_), names), reverse=True)
+	colNameVecSort=[x[1] for x in vecSort]
+	#print('add' in colNameVecSort)
 
-scoreVec=[]
-featVec=[1,2,3,4,5,6,7,8,9,10,15,16,17,18,19,20,30,40,50,60,70,80,90,100]
-for nFeatures in featVec:
-	print(nFeatures)
-	selFeatures=colNameVecSort[0:nFeatures] #select nFeatures
-	#print(selFeatures)
-	scores = cross_val_score(clf, trainingNoMismatch.loc[:,selFeatures], labelsNoMismatch.iloc[:,classToPredict], cv=5, scoring='balanced_accuracy')
-	scoreVec.append(scores.mean())
+	scoreVec=[]
+	featVec=[1,2,3,4,5,6,7,8,9,10,15,16,17,18,19,20,30,40,50,60,70,80,90,100]
+	X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
+	for nFeatures in featVec:
+		print(nFeatures)
+		selFeatures=colNameVecSort[0:nFeatures] #select nFeatures
+		#print(selFeatures)
+		scores = cross_val_score(clf, trainingNoMismatch.loc[:,selFeatures], labelsNoMismatch.iloc[:,classToPredict], cv=5, scoring='roc_auc')
+		scoreVec.append(scores.mean())
 
-print(list(zip(featVec,scoreVec)))
+	print(list(zip(featVec,scoreVec)))
 
+	#Call xgboost
+	sumneg=sum(labelsNoMismatch.iloc[:,classToPredict]==0)
+	sumpos=sum(labelsNoMismatch.iloc[:,classToPredict]==1)
+	print(sumpos)
+	print(sumneg)
+	selFeatures=colNameVecSort[0:nFeat]
+	print(selFeatures)
+	xgboost = XGBClassifier(scale_pos_weight=sumneg/sumpos)	
+	xgboost.fit(trainingNoMismatch.loc[:,selFeatures], labelsNoMismatch.iloc[:,classToPredict])
+	#predict
+	X_test = training.iloc[misMatchInd,:].loc[:,selFeatures]   
+	y_pred = xgboost.predict(X_test)
+	#test
+	#y_pred==labels.iloc[misMatchInd,classToPredict]
+	compMat[:,classToPredict-1]=y_pred
 
-xgboot = XGBClassifier()
-#y_pred = model.predict(X_test)
-#y=clf.predict(training.iloc[misMatcInd,:].loc[:,selFeatures])   
-#y==labels.iloc[misMatcInd,classToPredict]
+print(compMat)
+
+#TO dO:
+#How to combine binary and continous features
