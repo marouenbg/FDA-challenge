@@ -9,7 +9,7 @@ from sklearn.feature_selection import SelectFromModel #select top features
 from xgboost import XGBClassifier #for xgboost
 from sklearn.ensemble import RandomForestClassifier #random forest
 from sklearn.model_selection import train_test_split #test set
-
+from sklearn.model_selection import cross_val_predict #cross val prediction
 #change working directory
 os.chdir('/home/marouen/challenges/FDA/data')
 
@@ -38,7 +38,7 @@ sum(matching["mismatch"])
 
 #for now impute by mean per row (patient) 
 #as mean by column (protein) yields entire NAN columns -> worth thr try anyway as feature selection
-#training=training.T.fillna(training.mean(axis=1)).T
+training=training.T.fillna(training.mean(axis=1)).T
 #normalize
 #training=(training-training.mean())/training.std()
 
@@ -66,7 +66,7 @@ for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 		classToPredict=1
 		nFeat=6
 	#feature selection though stability selection
-	#trainingNoMismatch['add1']=labelsNoMismatch.iloc[:,anteClass].values
+	trainingNoMismatch['add1']=labelsNoMismatch.iloc[:,anteClass].values
 	#trainingNoMismatch['add2']=1 - labelsNoMismatch.iloc[:,anteClass].values
 	#trainingNoMismatch=(trainingNoMismatch-trainingNoMismatch.mean())/trainingNoMismatch.std()
 	#print(trainingNoMismatch.loc[:,'add1'])
@@ -83,12 +83,12 @@ for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 
 	scoreVec=[]
 	featVec=[1,2,3,4,5,6,7,8,9,10,15,16,17,18,19,20,30,40,50,60,70,80,90,100]
-	X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
+	X_train, X_test, y_train, y_test = train_test_split(trainingNoMismatch, labelsNoMismatch.iloc[:,classToPredict], test_size=0.1, random_state=42)
 	for nFeatures in featVec:
 		print(nFeatures)
 		selFeatures=colNameVecSort[0:nFeatures] #select nFeatures
 		#print(selFeatures)
-		scores = cross_val_score(clf, trainingNoMismatch.loc[:,selFeatures], labelsNoMismatch.iloc[:,classToPredict], cv=5, scoring='roc_auc')
+		scores = cross_val_score(clf, X_train.loc[:,selFeatures], y_train, cv=5, scoring='roc_auc')
 		scoreVec.append(scores.mean())
 
 	print(list(zip(featVec,scoreVec)))
