@@ -12,6 +12,7 @@ from sklearn.ensemble import RandomForestClassifier #random forest
 from sklearn.model_selection import train_test_split #test set
 from sklearn.model_selection import cross_val_predict #cross val prediction
 from sklearn.metrics import accuracy_score #accuracy
+from functools import reduce #for set union
 
 #change working directory
 os.chdir('/home/marouen/challenges/FDA/data')
@@ -39,14 +40,17 @@ training.max().plot(kind='hist')
 training.isna().sum().plot(kind='hist')
 sum(matching["mismatch"])
 
-impute='m' #or 'genderspecific' 
+impute='mean' # mean or 'specific' 
 if impute=='mean':
 	#for now impute by mean per row (patient) 
 	#as mean by column (protein) yields entire NAN columns -> worth thr try anyway as feature selection
-	training=training.T.fillna(training.mean(axis=1)).T
+	#training=training.T.fillna(training.mean(axis=1)).T
+	#by protein
+	training=training.fillna(training.mean(axis=1))
+	training.dropna(axis=1, inplace=True)
 	#normalize
 	#training=(training-training.mean())/training.std()
-else:
+elif impute=='specific':
 	#identify x and y proteins
 	indices=np.where(matching["mismatch"]==0)[0]
 	r=re.compile(".+(X|Y)")
@@ -64,12 +68,20 @@ else:
 		training.loc[:,prot[i]].iloc[maleInd]=training.loc[:,prot[i]].iloc[maleInd].fillna(meanMale[i])
 		training.loc[:,prot[i]].iloc[femaleInd]=training.loc[:,prot[i]].iloc[femaleInd].fillna(meanFemale[i])
 	#Impute the other missing by the mean (consider MSI and further refien prot liek CYP and COX)
-	for i in range(len(msiProt)):
-		training.loc[:,msiProt[i]].iloc[msiLoInd]=training.loc[:,msiProt[i]].iloc[msiLoInd].fillna(meanMsiLo[i])
-		training.loc[:,msiProt[i]].iloc[msiHiInd]=training.loc[:,msiProt[i]].iloc[msiHiInd].fillna(meanMsiHi[i])
+	#for i in range(len(msiProt)):
+		#training.loc[:,msiProt[i]].iloc[msiLoInd]=training.loc[:,msiProt[i]].iloc[msiLoInd].fillna(meanMsiLo[i])
+		#training.loc[:,msiProt[i]].iloc[msiHiInd]=training.loc[:,msiProt[i]].iloc[msiHiInd].fillna(meanMsiHi[i])
 	#Although we can't fill all proteins because some of the proteins in match are completely
 	#na so fill remaining (incl Mismatch) by mean of patient
-	training=training.T.fillna(training.mean(axis=1)).T
+	a=np.where(meanMale.isnull()==True)
+	b=np.where(meanFemale.isnull()==True)
+	c=np.where(meanMsiLo.isnull()==True)
+	d=np.where(meanMsiHi.isnull()==True)
+	e=reduce(np.union1d, (a,b,c,d))
+	#delete rows of missing value
+	training.drop(training.columns[e], axis=1, inplace=True)
+	training=training.fillna(training.mean(axis=1))
+	training.dropna(axis=1, inplace=True)
 	#BONUS: do all of the above in pandas
 
 #remove mismatches for now
@@ -91,7 +103,7 @@ compMat[:,2:4]=labels.iloc[misMatchInd,1:3]
 for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 	if anteClass==1:
 		classToPredict=2
-		nFeat=10
+		nFeat=8
 	elif anteClass==2:
 		classToPredict=1
 		nFeat=10
@@ -102,7 +114,7 @@ for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 	#print(trainingNoMismatch.loc[:,'add1'])
 	#random.seed(1)
 	#classToPredict could be 1 (sex) or 2 (msi)
-	clf = ExtraTreesClassifier(n_estimators=300, class_weight="balanced")  #need high resampling to
+	clf = ExtraTreesClassifier(n_estimators=100, class_weight="balanced")  #need high resampling to
 	clf.fit(trainingNoMismatch, labelsNoMismatch.iloc[:,classToPredict]) #predict sex 1 disease 2
 	names=list(trainingNoMismatch)
 	#print "Features sorted by their score:"
@@ -112,14 +124,13 @@ for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 	#print('add' in colNameVecSort)
 
 	scoreVec=[]
-	featVec=[1,2,3,4,5,6,7,8,9,10,15,16,17,18,19,20,30,40,50,60,70,80,90,100]
-	#X_train, X_test, y_train, y_test = train_test_split(trainingNoMismatch, labelsNoMismatch.iloc[:,classToPredict], test_size=0.1, random_state=42)#42
+	featVec=[1,2,3,4,5,6,7,8,9,10,15] #,16,17,18,19,20,30,40,50]
+	#X_train, X_test, y_train, y_test = train_test_split(trainingNoMismatch, labelsNoMismatch.iloc[:,classToPredict], test_size=0.4, random_state=42) #42
 	for nFeatures in featVec:
 		#print(nFeatures)
 		selFeatures=colNameVecSort[0:nFeatures] #select nFeatures
-		#print(selFeatures)
-		scores = cross_val_score(clf, trainingNoMismatch.loc[:,selFeatures], labelsNoMismatch.iloc[:,classToPredict], cv=5, scoring='balanced_accuracy')
-		#scores = cross_val_score(clf, X_train.loc[:,selFeatures], y_train, cv=5, scoring='f1')
+		scores = cross_val_score(clf, trainingNoMismatch.loc[:,selFeatures], labelsNoMismatch.iloc[:,classToPredict], cv=5, scoring='accuracy')
+		#scores = cross_val_score(clf, X_train.loc[:,selFeatures], y_train, cv=3, scoring='f1_weighted')
 		scoreVec.append(scores.mean())
 
 	print(list(zip(featVec,scoreVec)))
@@ -129,17 +140,18 @@ for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 	sumpos=sum(labelsNoMismatch.iloc[:,classToPredict]==1)
 	selFeatures=colNameVecSort[0:nFeat]
 	print(selFeatures)
-	xgboost = XGBClassifier(scale_pos_weight=sumneg/sumpos)	
-	xgboost.fit(trainingNoMismatch.loc[:,selFeatures], labelsNoMismatch.iloc[:,classToPredict])
-	#xgboost.fit(X_train, y_train)
-	#y_pred=xgboost.predict(X_test)
+	clf = ExtraTreesClassifier(n_estimators=200, class_weight="balanced")  #need high resampling to
+	clf.fit(trainingNoMismatch.loc[:,selFeatures], labelsNoMismatch.iloc[:,classToPredict])
+	#print(y_test)
+	#print(y_pred)
 	#a=accuracy_score(y_test,y_pred)
 	#print(a)
+
 	#predict
 	X_test = training.iloc[misMatchInd,:].loc[:,selFeatures]   
-	y_pred = xgboost.predict(X_test)
+	y_pred = clf.predict(X_test)
+	print(y_pred)
 	#test
-	#y_pred==labels.iloc[misMatchInd,classToPredict]
 	compMat[:,classToPredict-1]=y_pred
 
 print(compMat)
