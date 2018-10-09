@@ -13,6 +13,7 @@ from sklearn.model_selection import train_test_split #test set
 from sklearn.model_selection import cross_val_predict #cross val prediction
 from sklearn.metrics import accuracy_score #accuracy
 from functools import reduce #for set union
+from sklearn.metrics import matthews_corrcoef
 
 #change working directory
 os.chdir('/home/marouen/challenges/FDA/data')
@@ -49,7 +50,7 @@ if impute=='mean':
 	training=training.fillna(training.mean(axis=1))
 	training.dropna(axis=1, inplace=True)
 	#normalize
-	#training=(training-training.mean())/training.std()
+	training=(training-training.mean())/training.std()
 elif impute=='specific':
 	#identify x and y proteins
 	indices=np.where(matching["mismatch"]==0)[0]
@@ -103,18 +104,18 @@ compMat[:,2:4]=labels.iloc[misMatchInd,1:3]
 for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 	if anteClass==1:
 		classToPredict=2
-		nFeat=8
+		nFeat=7
 	elif anteClass==2:
 		classToPredict=1
-		nFeat=10
+		nFeat=15
 	#feature selection though stability selection
 	#trainingNoMismatch['add1']=labelsNoMismatch.iloc[:,anteClass].values
 	#trainingNoMismatch['add2']=1 - labelsNoMismatch.iloc[:,anteClass].values
 	#trainingNoMismatch=(trainingNoMismatch-trainingNoMismatch.mean())/trainingNoMismatch.std()
 	#print(trainingNoMismatch.loc[:,'add1'])
-	#random.seed(1)
+	random.seed(1)
 	#classToPredict could be 1 (sex) or 2 (msi)
-	clf = ExtraTreesClassifier(n_estimators=100, class_weight="balanced")  #need high resampling to
+	clf = ExtraTreesClassifier(n_estimators=200, class_weight="balanced")  #need high resampling to
 	clf.fit(trainingNoMismatch, labelsNoMismatch.iloc[:,classToPredict]) #predict sex 1 disease 2
 	names=list(trainingNoMismatch)
 	#print "Features sorted by their score:"
@@ -124,8 +125,8 @@ for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 	#print('add' in colNameVecSort)
 
 	scoreVec=[]
-	featVec=[1,2,3,4,5,6,7,8,9,10,15] #,16,17,18,19,20,30,40,50]
-	#X_train, X_test, y_train, y_test = train_test_split(trainingNoMismatch, labelsNoMismatch.iloc[:,classToPredict], test_size=0.4, random_state=42) #42
+	featVec=[1,2,3,4,5,6,7,8,9,10,15,16,17,18,19,20,30,40,50,60,70,80,90,100]
+	X_train, X_test, y_train, y_test = train_test_split(trainingNoMismatch, labelsNoMismatch.iloc[:,classToPredict], test_size=0.2, random_state=442) #42
 	for nFeatures in featVec:
 		#print(nFeatures)
 		selFeatures=colNameVecSort[0:nFeatures] #select nFeatures
@@ -141,20 +142,21 @@ for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 	selFeatures=colNameVecSort[0:nFeat]
 	print(selFeatures)
 	clf = ExtraTreesClassifier(n_estimators=200, class_weight="balanced")  #need high resampling to
-	clf.fit(trainingNoMismatch.loc[:,selFeatures], labelsNoMismatch.iloc[:,classToPredict])
-	#print(y_test)
-	#print(y_pred)
-	#a=accuracy_score(y_test,y_pred)
-	#print(a)
-
-	#predict
-	X_test = training.iloc[misMatchInd,:].loc[:,selFeatures]   
-	y_pred = clf.predict(X_test)
+	clf.fit(X_train.loc[:,selFeatures], y_train)
+	y_pred=clf.predict(X_test.loc[:,selFeatures])
+	print(y_test)
 	print(y_pred)
-	#test
-	compMat[:,classToPredict-1]=y_pred
+	a=matthews_corrcoef(y_test,y_pred)
+	print(a)
 
-print(compMat)
+	##predict
+	#X_test = training.iloc[misMatchInd,:].loc[:,selFeatures]   
+	#y_pred = clf.predict(X_test)
+	#print(y_pred)
+	##test
+	#compMat[:,classToPredict-1]=y_pred
+
+#print(compMat)
 
 #TO dO:
 #How to combine binary and continous features
