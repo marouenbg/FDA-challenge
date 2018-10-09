@@ -5,6 +5,7 @@ from sklearn.ensemble import ExtraTreesClassifier #call extra trees
 import random #to set the seed
 import os
 import re #regex
+import math
 from sklearn.model_selection import cross_val_score #cross validation
 from sklearn.feature_selection import SelectFromModel #select top features
 from xgboost import XGBClassifier #for xgboost
@@ -14,9 +15,14 @@ from sklearn.model_selection import cross_val_predict #cross val prediction
 from sklearn.metrics import accuracy_score #accuracy
 from functools import reduce #for set union
 from sklearn.metrics import matthews_corrcoef
+from sklearn.linear_model import RandomizedLasso #stability selection
 
 #change working directory
 os.chdir('/home/marouen/challenges/FDA/data')
+
+#Random seed
+seed=42
+random.seed(seed)
 
 #read data files
 training = pd.read_csv("train_pro.tsv", sep="\t")
@@ -69,9 +75,9 @@ elif impute=='specific':
 		training.loc[:,prot[i]].iloc[maleInd]=training.loc[:,prot[i]].iloc[maleInd].fillna(meanMale[i])
 		training.loc[:,prot[i]].iloc[femaleInd]=training.loc[:,prot[i]].iloc[femaleInd].fillna(meanFemale[i])
 	#Impute the other missing by the mean (consider MSI and further refien prot liek CYP and COX)
-	#for i in range(len(msiProt)):
-		#training.loc[:,msiProt[i]].iloc[msiLoInd]=training.loc[:,msiProt[i]].iloc[msiLoInd].fillna(meanMsiLo[i])
-		#training.loc[:,msiProt[i]].iloc[msiHiInd]=training.loc[:,msiProt[i]].iloc[msiHiInd].fillna(meanMsiHi[i])
+	for i in range(len(msiProt)):
+		training.loc[:,msiProt[i]].iloc[msiLoInd]=training.loc[:,msiProt[i]].iloc[msiLoInd].fillna(meanMsiLo[i])
+		training.loc[:,msiProt[i]].iloc[msiHiInd]=training.loc[:,msiProt[i]].iloc[msiHiInd].fillna(meanMsiHi[i])
 	#Although we can't fill all proteins because some of the proteins in match are completely
 	#na so fill remaining (incl Mismatch) by mean of patient
 	a=np.where(meanMale.isnull()==True)
@@ -109,58 +115,38 @@ for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 		classToPredict=1
 		nFeat=15
 	#feature selection though stability selection
-	#trainingNoMismatch['add1']=labelsNoMismatch.iloc[:,anteClass].values
-	#trainingNoMismatch['add2']=1 - labelsNoMismatch.iloc[:,anteClass].values
-	#trainingNoMismatch=(trainingNoMismatch-trainingNoMismatch.mean())/trainingNoMismatch.std()
-	#print(trainingNoMismatch.loc[:,'add1'])
-	random.seed(1)
 	#classToPredict could be 1 (sex) or 2 (msi)
-	clf = ExtraTreesClassifier(n_estimators=200, class_weight="balanced")  #need high resampling to
-	clf.fit(trainingNoMismatch, labelsNoMismatch.iloc[:,classToPredict]) #predict sex 1 disease 2
+	X_train, X_test, y_train, y_test = train_test_split(trainingNoMismatch, labelsNoMismatch.iloc[:,classToPredict], test_size=0.2, random_state=seed) #42
+	rl = RandomizedLasso(alpha='aic', random_state=seed, n_resampling=1000)  #need high resampling to
+	rl.fit(X_train,y_train) #predict sex 1 disease 2
 	names=list(trainingNoMismatch)
 	#print "Features sorted by their score:"
-	#print sorted(zip(map(lambda x: round(x, 4), rlasso.scores_), names), reverse=True)
-	vecSort=sorted(zip(map(lambda x: round(x, 4), clf.feature_importances_), names), reverse=True)
+	#print(sorted(zip(map(lambda x: round(x, 4), rl.scores_), names), reverse=True))
+	vecSort=sorted(zip(map(lambda x: round(x, 4), rl.scores_), names), reverse=True)
 	colNameVecSort=[x[1] for x in vecSort]
 	#print('add' in colNameVecSort)
 
 	scoreVec=[]
 	featVec=[1,2,3,4,5,6,7,8,9,10,15,16,17,18,19,20,30,40,50,60,70,80,90,100]
-	X_train, X_test, y_train, y_test = train_test_split(trainingNoMismatch, labelsNoMismatch.iloc[:,classToPredict], test_size=0.2, random_state=442) #42
+	#X_train, X_test, y_train, y_test = train_test_split(trainingNoMismatch, labelsNoMismatch.iloc[:,classToPredict], test_size=0.2, random_state=42) #42
 	for nFeatures in featVec:
-		#print(nFeatures)
 		selFeatures=colNameVecSort[0:nFeatures] #select nFeatures
-		scores = cross_val_score(clf, trainingNoMismatch.loc[:,selFeatures], labelsNoMismatch.iloc[:,classToPredict], cv=5, scoring='accuracy')
-		#scores = cross_val_score(clf, X_train.loc[:,selFeatures], y_train, cv=3, scoring='f1_weighted')
-		scoreVec.append(scores.mean())
+		sumneg=sum(y_train==0)
+		sumpos=sum(y_train==1)
+		xgboost = XGBClassifier(scale_pos_weight=sumneg/sumpos)	
+		xgboost.fit(X_train.loc[:,selFeatures], y_train)
+		y_pred=xgboost.predict(X_test.loc[:,selFeatures])
+		a=accuracy_score(y_test,y_pred)
+		scoreVec.append(a)
 
 	print(list(zip(featVec,scoreVec)))
 
-	#Call xgboost
-	sumneg=sum(labelsNoMismatch.iloc[:,classToPredict]==0)
-	sumpos=sum(labelsNoMismatch.iloc[:,classToPredict]==1)
-	selFeatures=colNameVecSort[0:nFeat]
-	print(selFeatures)
-	clf = ExtraTreesClassifier(n_estimators=200, class_weight="balanced")  #need high resampling to
-	clf.fit(X_train.loc[:,selFeatures], y_train)
-	y_pred=clf.predict(X_test.loc[:,selFeatures])
-	print(y_test)
-	print(y_pred)
-	a=matthews_corrcoef(y_test,y_pred)
-	print(a)
-
-	##predict
-	#X_test = training.iloc[misMatchInd,:].loc[:,selFeatures]   
-	#y_pred = clf.predict(X_test)
-	#print(y_pred)
-	##test
-	#compMat[:,classToPredict-1]=y_pred
-
-#print(compMat)
-
-#TO dO:
+#To do:
 #How to combine binary and continous features
 #compute metric between pred and exp
 #combine multipe metrics
 #kappa cohen
 #fill gender specific proteins by gender specific means
+
+#Problems:
+#not same set of features selected
