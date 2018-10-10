@@ -28,7 +28,7 @@ from sklearn.ensemble import VotingClassifier
 os.chdir('/home/marouen/challenges/FDA/data')
 
 #Random seed
-seed=1421
+seed=42
 random.seed(seed)
 
 #read data files
@@ -158,10 +158,9 @@ def featureSelection(method,X_train,y_train,trainingNoMismatch,seed):
 		scores=rl.scores_
 	elif method=='et':
 		n_resampling=1000	
-		seed=42
 		scores=np.zeros(X_train.shape[1])
 		for i in range(n_resampling):
-			xx_train, xx_test, yy_train, yy_test = train_test_split(X_train, y_train, test_size=0.25, random_state=seed)
+			xx_train, xx_test, yy_train, yy_test = train_test_split(X_train, y_train, test_size=0.25, random_state=i)
 			clf = ExtraTreesClassifier(n_estimators=100, class_weight='balanced')
 			clf = clf.fit(xx_train, yy_train)
 			scores=np.add(scores,clf.feature_importances_)
@@ -219,7 +218,6 @@ for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 		scoreVec.append(a)
 
 	print(list(zip(featVec,scoreVec)))
-
 
 
 #To do:
