@@ -18,6 +18,12 @@ from sklearn.metrics import matthews_corrcoef
 from sklearn.metrics import f1_score #f1 score
 from sklearn.linear_model import RandomizedLasso #stability selection
 
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.svm import SVC
+from itertools import product
+from sklearn.ensemble import VotingClassifier
+
 #change working directory
 os.chdir('/home/marouen/challenges/FDA/data')
 
@@ -128,6 +134,7 @@ def printResult(y_pred,compMat,labelsTest):
 	#write file:
 	res.to_csv('submission1.csv',sep=',',index=False)
 
+###Beginning###
 training,labels,matching,test,labelsTest=loadData()
 labels,labelsTest=encodeData(labels,labelsTest)
 impute='mean'
@@ -157,6 +164,7 @@ for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 		nFeat=30
 	#feature selection though stability selection
 	#classToPredict could be 1 (sex) or 2 (msi)
+	#trainingNoMismatch['add1']=labelsNoMismatch.iloc[:,anteClass].values.astype(float)
 	X_train, X_test, y_train, y_test = train_test_split(trainingNoMismatch, labelsNoMismatch.iloc[:,classToPredict], test_size=0.2, random_state=seed) #42
 	rl = RandomizedLasso(alpha='aic', random_state=seed, n_resampling=1000)  #need high resampling to
 	rl.fit(X_train,y_train) #predict sex 1 disease 2
@@ -172,9 +180,17 @@ for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 		selFeatures=colNameVecSort[0:nFeatures] #select nFeatures
 		sumneg=sum(y_train==0)
 		sumpos=sum(y_train==1)
-		xgboost = XGBClassifier(scale_pos_weight=sumneg/sumpos)	
-		xgboost.fit(X_train.loc[:,selFeatures], y_train)
-		y_pred=xgboost.predict(X_test.loc[:,selFeatures])
+		#xgboost = XGBClassifier(scale_pos_weight=sumneg/sumpos)
+		clf1 = ExtraTreesClassifier(n_estimators=200, class_weight='balanced')
+		clf2 = KNeighborsClassifier(n_neighbors=7)
+		clf3 = SVC(gamma='scale', kernel='rbf', probability=True)	
+		eclf = VotingClassifier(estimators=[('dt', clf1), ('knn', clf2), ('svc', clf3)], voting='soft', weights=[2,1,2])
+		clf1 = clf1.fit(X_train.loc[:,selFeatures],y_train)
+		clf2 = clf2.fit(X_train.loc[:,selFeatures],y_train)
+		clf3 = clf3.fit(X_train.loc[:,selFeatures],y_train)
+		#xgboost.fit(X_train.loc[:,selFeatures], y_train)
+		eclf = eclf.fit(X_train.loc[:,selFeatures],y_train)
+		y_pred=eclf.predict(X_test.loc[:,selFeatures])
 		a=f1_score(y_test,y_pred)
 		scoreVec.append(a)
 
