@@ -61,11 +61,13 @@ def imputeMissing(impute,training,test):
 		#training=training.T.fillna(training.mean(axis=1)).T
 		#combined
 		result=pd.concat([training,test])
-		result=result.fillna(result.mean(axis=1))
-		result.dropna(axis=1, inplace=True)
+		result=result.fillna(result.mean())
+		print(result.shape)
+		result.dropna(axis=1, inplace=True, how='all')
 		result=(result-result.mean())/result.std()
 		training=result.iloc[:80,:]
 		test    =result.iloc[80:,:]
+		print(training.shape,test.shape)
 		#by protein
 		#training=training.fillna(training.mean(axis=1))
 		#training.dropna(axis=1, inplace=True)
