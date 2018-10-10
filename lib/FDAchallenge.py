@@ -25,10 +25,13 @@ seed=42
 random.seed(seed)
 
 #read data files
-training = pd.read_csv("train_pro.tsv", sep="\t")
-training = training.T#transpose the dataframe
-labels = pd.read_csv("train_cli.tsv", sep="\t")
-matching = pd.read_csv("sum_tab_1.csv")
+training  = pd.read_csv("train_pro.tsv", sep="\t")
+training  = training.T #transpose the dataframe
+labels    = pd.read_csv("train_cli.tsv", sep="\t")
+matching  = pd.read_csv("sum_tab_1.csv")
+test      = pd.read_csv("test_pro.tsv", sep="\t")
+test      = test.T
+labelsTest= pd.read_csv("test_cli.tsv", sep="\t") 
 
 #Mesure size of classes
 #print(labels.groupby(['gender']).size())
@@ -37,6 +40,8 @@ matching = pd.read_csv("sum_tab_1.csv")
 #Encode sex and MSI
 labels['gender'].replace(['Female','Male'],[0,1], inplace=True)
 labels['msi'].replace(['MSI-Low/MSS','MSI-High'],[0,1], inplace=True)
+labelsTest['gender'].replace(['Female','Male'],[0,1], inplace=True)
+labelsTest['msi'].replace(['MSI-Low/MSS','MSI-High'],[0,1], inplace=True)
 #print(sum(labels[labels['gender'] == 1]['msi'])/sum(labels['gender'] == 1))
 #print(sum(labels[labels['gender'] == 0]['msi'])/sum(labels['gender'] == 0))
 #print(sum(labels[labels['msi'] == 1]['gender'])/sum(labels['msi'] == 1))
@@ -47,21 +52,38 @@ training.max().plot(kind='hist')
 training.isna().sum().plot(kind='hist')
 sum(matching["mismatch"])
 
+#remove mismatches for now
+indices = np.where(matching["mismatch"]==0)[0]
+misMatchInd = np.where(matching["mismatch"]==1)[0]
+trainingNoMismatch = training.iloc[indices,:]
+labelsNoMismatch = labels.iloc[indices,:]
+
 impute='mean' # mean or 'specific' 
 if impute=='mean':
 	#for now impute by mean per row (patient) 
 	#as mean by column (protein) yields entire NAN columns -> worth thr try anyway as feature selection
 	#training=training.T.fillna(training.mean(axis=1)).T
+	#combined
+	result=pd.concat([training,test])
+	result=result.fillna(result.mean(axis=1))
+	result.dropna(axis=1, inplace=True)
+	result=(result-result.mean())/result.std()
+	training=result.iloc[:80,:]
+	test    =result.iloc[80:,:]
 	#by protein
-	training=training.fillna(training.mean(axis=1))
-	training.dropna(axis=1, inplace=True)
+	#training=training.fillna(training.mean(axis=1))
+	#training.dropna(axis=1, inplace=True)
 	#normalize
-	training=(training-training.mean())/training.std()
+	#training=(training-training.mean())/training.std()
+	#Test
+	#test=test.fillna(test.mean(axis=1))
+	#test.dropna(axis=1, inplace=True)
+	#test=(test-test.mean())/test.std()
 elif impute=='specific':
 	#identify x and y proteins
-	indices=np.where(matching["mismatch"]==0)[0]
 	r=re.compile(".+(X|Y)")
-	prot      =list(filter(r.match,list(training))) #matching XY proteins
+	#prot      =list(filter(r.match,list(training))) #matching XY proteins
+	prot      =['USP9Y']
 	msiProt   =list(set(list(training)) - set(prot)) #non matching prot
 	maleInd   =list( set(np.where(labels["gender"]==1)[0]) & set(indices))
 	femaleInd =list( set(np.where(labels["gender"]==0)[0]) & set(indices))
@@ -75,11 +97,11 @@ elif impute=='specific':
 		training.loc[:,prot[i]].iloc[maleInd]=training.loc[:,prot[i]].iloc[maleInd].fillna(meanMale[i])
 		training.loc[:,prot[i]].iloc[femaleInd]=training.loc[:,prot[i]].iloc[femaleInd].fillna(meanFemale[i])
 	#Impute the other missing by the mean (consider MSI and further refien prot liek CYP and COX)
-	for i in range(len(msiProt)):
-		training.loc[:,msiProt[i]].iloc[msiLoInd]=training.loc[:,msiProt[i]].iloc[msiLoInd].fillna(meanMsiLo[i])
-		training.loc[:,msiProt[i]].iloc[msiHiInd]=training.loc[:,msiProt[i]].iloc[msiHiInd].fillna(meanMsiHi[i])
+	#for i in range(len(msiProt)):
+		#training.loc[:,msiProt[i]].iloc[msiLoInd]=training.loc[:,msiProt[i]].iloc[msiLoInd].fillna(meanMsiLo[i])
+		#training.loc[:,msiProt[i]].iloc[msiHiInd]=training.loc[:,msiProt[i]].iloc[msiHiInd].fillna(meanMsiHi[i])
 	#Although we can't fill all proteins because some of the proteins in match are completely
-	#na so fill remaining (incl Mismatch) by mean of patient
+	#na so fi++5614ll remaining (incl Mismatch) by mean of patient
 	a=np.where(meanMale.isnull()==True)
 	b=np.where(meanFemale.isnull()==True)
 	c=np.where(meanMsiLo.isnull()==True)
@@ -104,9 +126,12 @@ labelsNoMismatch = labels.iloc[indices,:]
 #impute by row mean or col mean
 #scale + standardize + fill missing
 #Optimize hyperparameters
+#new idea to find x chr prot less than 50 missing
 
-compMat=np.zeros([len(misMatchInd),4])
-compMat[:,2:4]=labels.iloc[misMatchInd,1:3]
+compMat=np.zeros([len(labelsTest),4])
+res=labelsTest.iloc[:,:1]
+res["mismatch"]=0
+compMat[:,2:4]=labelsTest.iloc[:,1:3]
 for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 	if anteClass==1:
 		classToPredict=2
@@ -128,7 +153,7 @@ for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 
 	scoreVec=[]
 	featVec=[1,2,3,4,5,6,7,8,9,10,15,16,17,18,19,20,30,40,50,60,70,80,90,100]
-	#X_train, X_test, y_train, y_test = train_test_split(trainingNoMismatch, labelsNoMismatch.iloc[:,classToPredict], test_size=0.2, random_state=42) #42
+	X_train, X_test, y_train, y_test = train_test_split(trainingNoMismatch, labelsNoMismatch.iloc[:,classToPredict], test_size=0.2, random_state=42) #42
 	for nFeatures in featVec:
 		selFeatures=colNameVecSort[0:nFeatures] #select nFeatures
 		sumneg=sum(y_train==0)
@@ -141,6 +166,25 @@ for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 
 	print(list(zip(featVec,scoreVec)))
 
+	#Predict
+	rl.fit(trainingNoMismatch.loc[:,selFeatures], labelsNoMismatch.iloc[:,classToPredict]) #predict sex 1 disease 2
+	vecSort=sorted(zip(map(lambda x: round(x, 4), rl.scores_), names), reverse=True)
+	colNameVecSort=[x[1] for x in vecSort]
+	selFeatures=colNameVecSort[0:nFeatures]
+	xgboost = XGBClassifier()
+	xgboost.fit(trainingNoMismatch.loc[:,selFeatures], labelsNoMismatch.iloc[:,classToPredict])
+	y_pred=xgboost.predict(test.loc[:,selFeatures])
+	compMat[:,classToPredict-1]=y_pred
+
+def printResult(y_pred,compMat,res):
+	for i in range(len(y_pred)):
+		if(compMat[i,0] != compMat[i,2]) & (compMat[i,1] != compMat[i,3]):
+			res.iloc[i,1]=1
+
+	#write file:
+	res.to_csv('submission1.csv',sep=',',index=False)
+
+printResult(y_pred,compMat,res)
 #To do:
 #How to combine binary and continous features
 #compute metric between pred and exp
