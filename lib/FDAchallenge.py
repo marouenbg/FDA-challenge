@@ -29,7 +29,7 @@ from sklearn.ensemble import VotingClassifier
 os.chdir('/home/marouen/challenges/FDA/data')
 
 #Random seed
-seed=142 #142
+seed=1421 #142
 random.seed(seed)
 
 #read data files
@@ -143,7 +143,8 @@ def classifier(X_train,y_train,X_test,selFeatures,how,seed):
 	elif how=='xg':
 		sumneg=sum(y_train==0)
 		sumpos=sum(y_train==1)
-		xgboost = XGBClassifier(scale_pos_weight=sumneg/sumpos, missing=-1, n_estimators=200, random_state=seed, booster='gbtree')	
+		xgboost = XGBClassifier(scale_pos_weight=sumneg/sumpos, missing=-1, n_estimators=200, random_state=seed, booster='gbtree',learning_rate=0.01,\
+			max_depth=9, subsample=0.9)	
 		xgboost.fit(X_train.loc[:,selFeatures], y_train)
 		y_pred=xgboost.predict(X_test.loc[:,selFeatures])
 	return y_pred
@@ -169,7 +170,8 @@ def featureSelection(method,X_train,y_train,trainingNoMismatch,seed,n_res):
 			xx_train, xx_test, yy_train, yy_test = train_test_split(X_train, y_train, test_size=0.25, random_state=i)
 			sumneg=sum(yy_train==0)
 			sumpos=sum(yy_train==1)
-			xgboost = XGBClassifier(scale_pos_weight=sumneg/sumpos, missing=-1, n_estimators=200, random_state=seed, booster='gbtree')        
+			xgboost = XGBClassifier(scale_pos_weight=sumneg/sumpos, missing=-1, n_estimators=200, random_state=seed, booster='gbtree',learning_rate=0.01,\
+				max_depth=9, subsample=0.9)        
 			xgboost.fit(xx_train, yy_train)
 			scores=np.add(scores,xgboost.feature_importances_)
 		scores=scores/n_res
@@ -224,12 +226,12 @@ for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 	#trainingNoMismatch['add1']=labelsNoMismatch.iloc[:,anteClass].values.astype(float)
 	X_train, X_test, y_train, y_test = train_test_split(trainingNoMismatch, labelsNoMismatch.iloc[:,classToPredict], test_size=0.2, random_state=seed) #42
 	method='xg'
-	n_res=100
+	n_res=10
 	colNameVecSort=featureSelection(method,X_train,y_train,trainingNoMismatch,seed,n_res)
 	
 	print(y_test)
 	scoreVec=[]
-	featVec=[1,2,3,4,5,6,7,8,9,10,15,16,17,18,19,20,30,40,50,60,70,80,90,100]
+	featVec=[1,2,3,4,5,6,7,8,9,10,15,16,17,18,19,20,30,40,50,60,70,80,90,100,X_train.shape[1]]
 	for nFeatures in featVec:
 		selFeatures=colNameVecSort[:nFeatures] #select nFeatures
 		how='xg'
