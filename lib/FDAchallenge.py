@@ -29,7 +29,7 @@ from sklearn.ensemble import VotingClassifier
 os.chdir('/home/marouen/challenges/FDA/data')
 
 #Random seed
-seed=38 #142
+seed=142 #142
 random.seed(seed)
 
 #read data files
@@ -68,21 +68,8 @@ def imputeMissing(impute,training,test):
 		result=result.fillna(-1)
 		result.dropna(axis=1, inplace=True, how='all')
 		#result=(result-result.mean())/result.std()
-		#result[result.abs() < 1e-4] = 0
 		training=result.iloc[:80,:]
 		test    =result.iloc[80:,:]
-		#by protein
-		#training=training.fillna(training.mean(axis=1))
-		#training.dropna(axis=1, inplace=True)
-		#normalize
-		#min_max_scaler = preprocessing.MinMaxScaler()
-		#np_scaled = min_max_scaler.fit_transform(result)
-		#training = pd.DataFrame(np_scaled)
-		#training=(training-training.mean())/training.std()
-		#Test
-		#test=test.fillna(test.mean(axis=1))
-		#test.dropna(axis=1, inplace=True)
-		#test=(test-test.mean())/test.std()
 	elif impute=='specific':
 		#identify x and y proteins
 		r=re.compile(".+Y")
@@ -156,33 +143,36 @@ def classifier(X_train,y_train,X_test,selFeatures,how,seed):
 	elif how=='xg':
 		sumneg=sum(y_train==0)
 		sumpos=sum(y_train==1)
-		xgboost = XGBClassifier(scale_pos_weight=sumneg/sumpos, missing=-1, n_estimators=200, random_state=seed)	
+		xgboost = XGBClassifier(scale_pos_weight=sumneg/sumpos, missing=-1, n_estimators=200, random_state=seed, booster='gbtree')	
 		xgboost.fit(X_train.loc[:,selFeatures], y_train)
 		y_pred=xgboost.predict(X_test.loc[:,selFeatures])
 	return y_pred
 
-def featureSelection(method,X_train,y_train,trainingNoMismatch,seed):
+def featureSelection(method,X_train,y_train,trainingNoMismatch,seed,n_res):
 	if method=='rl':
 		#feature selection though stability selection
 		#classToPredict could be 1 (sex) or 2 (msi)
-		rl = RandomizedLasso(alpha='aic', random_state=seed, n_resampling=1000)  #need high resampling to
+		rl = RandomizedLasso(alpha='aic', random_state=seed, n_resampling=n_res)  #need high resampling to
 		rl.fit(X_train,y_train) #predict sex 1 disease 2
 		scores=rl.scores_
 	elif method=='et':
-		n_resampling=1000	
 		scores=np.zeros(X_train.shape[1])
-		for i in range(n_resampling):
+		for i in range(n_res):
 			xx_train, xx_test, yy_train, yy_test = train_test_split(X_train, y_train, test_size=0.25, random_state=i)
 			clf = ExtraTreesClassifier(n_estimators=100, class_weight='balanced')
 			clf = clf.fit(xx_train, yy_train)
 			scores=np.add(scores,clf.feature_importances_)
-		scores=scores/n_resampling
+		scores=scores/n_res
 	elif method=='xg':
-		sumneg=sum(y_train==0)
-		sumpos=sum(y_train==1)
-		xgboost = XGBClassifier(scale_pos_weight=sumneg/sumpos, missing=-1, n_estimators=200, random_state=seed)        
-		xgboost.fit(X_train, y_train)
-		scores=xgboost.feature_importances_
+		scores=np.zeros(X_train.shape[1])
+		for i in range(n_res):
+			xx_train, xx_test, yy_train, yy_test = train_test_split(X_train, y_train, test_size=0.25, random_state=i)
+			sumneg=sum(yy_train==0)
+			sumpos=sum(yy_train==1)
+			xgboost = XGBClassifier(scale_pos_weight=sumneg/sumpos, missing=-1, n_estimators=200, random_state=seed, booster='gbtree')        
+			xgboost.fit(xx_train, yy_train)
+			scores=np.add(scores,xgboost.feature_importances_)
+		scores=scores/n_res
 
 	names=list(trainingNoMismatch)
         #print "Features sorted by their score:"
@@ -209,10 +199,6 @@ training.max().plot(kind='hist')
 training.isna().sum().plot(kind='hist')
 sum(matching["mismatch"])
 
-#Mesure size of classes
-#print(labels.groupby(['gender']).size())
-#print(labels.groupby(['msi']).size())
-
 #remove mismatches for now
 indices = np.where(matching["mismatch"]==0)[0]
 misMatchInd = np.where(matching["mismatch"]==1)[0]
@@ -220,7 +206,6 @@ trainingNoMismatch = training.iloc[indices,:]
 labelsNoMismatch = labels.iloc[indices,:]
 
 if mergeCols==1:
-	#print(test.loc[:,"USP9Y"])
 	trainingNoMismatch.reset_index(drop=True, inplace=True)
 	labelsNoMismatch.reset_index(drop=True, inplace=True)
 	x = {'RPS4Y1': trainingNoMismatch.loc[:,"RPS4Y1"], 'RPS4Y2':trainingNoMismatch.loc[:,"RPS4Y2"],'EIF1AY': trainingNoMismatch.loc[:,'EIF1AY'], \
@@ -234,14 +219,13 @@ if mergeCols==1:
 for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 	if anteClass==1:
 		classToPredict=2
-		nFeat=10
 	elif anteClass==2:
 		classToPredict=1
-		nFeat=30
 	#trainingNoMismatch['add1']=labelsNoMismatch.iloc[:,anteClass].values.astype(float)
 	X_train, X_test, y_train, y_test = train_test_split(trainingNoMismatch, labelsNoMismatch.iloc[:,classToPredict], test_size=0.2, random_state=seed) #42
 	method='xg'
-	colNameVecSort=featureSelection(method,X_train,y_train,trainingNoMismatch,seed)
+	n_res=100
+	colNameVecSort=featureSelection(method,X_train,y_train,trainingNoMismatch,seed,n_res)
 	
 	print(y_test)
 	scoreVec=[]
@@ -277,3 +261,7 @@ for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 #Why such low mean for UDP9Y as in 1e-15?-> scaling
 #class balance in randomized lasso
 #missing in xgboost
+
+#Note:
+#gblinear is better with msiand gbtree with sex
+#seed=42 does not improve with gradient boost, better with imputation to 0
