@@ -29,7 +29,7 @@ from sklearn.ensemble import VotingClassifier
 os.chdir('/home/marouen/challenges/FDA/data')
 
 #Random seed
-seed=1421 #142
+seed=142 #142
 random.seed(seed)
 
 #read data files
@@ -223,22 +223,24 @@ for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 		classToPredict=2
 	elif anteClass==2:
 		classToPredict=1
-	#trainingNoMismatch['add1']=labelsNoMismatch.iloc[:,anteClass].values.astype(float)
-	X_train, X_test, y_train, y_test = train_test_split(trainingNoMismatch, labelsNoMismatch.iloc[:,classToPredict], test_size=0.2, random_state=seed) #42
-	method='xg'
-	n_res=10
-	colNameVecSort=featureSelection(method,X_train,y_train,trainingNoMismatch,seed,n_res)
+	nCrossVal=5
+	featVec=[1,2,3,4,5,6,7,8,9,10,15,16,17,18,19,20,30,40,50,60,70,80,90,100,training.shape[1]]
+	scoreVec=np.zeros((nCrossVal,len(featVec)))
+	for i in range(nCrossVal):
+		#trainingNoMismatch['add1']=labelsNoMismatch.iloc[:,anteClass].values.astype(float)
+		X_train, X_test, y_train, y_test = train_test_split(trainingNoMismatch, labelsNoMismatch.iloc[:,classToPredict], test_size=0.2, random_state=i) #42
+		method='xg'
+		n_res=10
+		colNameVecSort=featureSelection(method,X_train,y_train,trainingNoMismatch,seed,n_res)
 	
-	print(y_test)
-	scoreVec=[]
-	featVec=[1,2,3,4,5,6,7,8,9,10,15,16,17,18,19,20,30,40,50,60,70,80,90,100,X_train.shape[1]]
-	for nFeatures in featVec:
-		selFeatures=colNameVecSort[:nFeatures] #select nFeatures
-		how='xg'
-		y_pred=classifier(X_train,y_train,X_test,selFeatures,how,seed)
-		a=f1_score(y_test,y_pred)
-		scoreVec.append(a)
-
+		print(y_test)
+		for j in range(len(featVec)):
+			selFeatures=colNameVecSort[:featVec[j]] #select nFeatures
+			how='xg'
+			y_pred=classifier(X_train,y_train,X_test,selFeatures,how,seed)
+			a=f1_score(y_test,y_pred)
+			scoreVec[i,j]=a
+	scoreVec=np.mean(scoreVec, axis=0)
 	print(list(zip(featVec,scoreVec)))
 
 
@@ -267,3 +269,6 @@ for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 #Note:
 #gblinear is better with msiand gbtree with sex
 #seed=42 does not improve with gradient boost, better with imputation to 0
+#try PCA
+#optimize xgboost
+#cross-validation
