@@ -17,6 +17,7 @@ from functools import reduce #for set union
 from sklearn.metrics import matthews_corrcoef
 from sklearn.metrics import f1_score #f1 score
 from sklearn.linear_model import RandomizedLasso #stability selection
+from sklearn import preprocessing
 
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.neighbors import KNeighborsClassifier
@@ -28,7 +29,7 @@ from sklearn.ensemble import VotingClassifier
 os.chdir('/home/marouen/challenges/FDA/data')
 
 #Random seed
-seed=42
+seed=38 #142
 random.seed(seed)
 
 #read data files
@@ -61,15 +62,22 @@ def imputeMissing(impute,training,test):
 		#training=training.T.fillna(training.mean(axis=1)).T
 		#combined
 		result=pd.concat([training,test])
-		result=result.fillna(result.mean())
+		#fillna of y proteins by zero
+		#result.loc[:,["RPS4Y1","RPS4Y2","EIF1AY","DDX3Y"]]=result.loc[:,["RPS4Y1","RPS4Y2","EIF1AY","DDX3Y"]].fillna(0) #USP9
+		#fill the rest by mean
+		result=result.fillna(-1)
 		result.dropna(axis=1, inplace=True, how='all')
 		#result=(result-result.mean())/result.std()
+		#result[result.abs() < 1e-4] = 0
 		training=result.iloc[:80,:]
 		test    =result.iloc[80:,:]
 		#by protein
 		#training=training.fillna(training.mean(axis=1))
 		#training.dropna(axis=1, inplace=True)
 		#normalize
+		#min_max_scaler = preprocessing.MinMaxScaler()
+		#np_scaled = min_max_scaler.fit_transform(result)
+		#training = pd.DataFrame(np_scaled)
 		#training=(training-training.mean())/training.std()
 		#Test
 		#test=test.fillna(test.mean(axis=1))
@@ -77,9 +85,9 @@ def imputeMissing(impute,training,test):
 		#test=(test-test.mean())/test.std()
 	elif impute=='specific':
 		#identify x and y proteins
-		r=re.compile(".+(X|Y)")
-		#prot      =list(filter(r.match,list(training))) #matching XY proteins
-		prot      =['USP9Y']
+		r=re.compile(".+Y")
+		prot      =list(filter(r.match,list(training))) #matching XY proteins
+		print(prot)
 		msiProt   =list(set(list(training)) - set(prot)) #non matching prot
 		maleInd   =list( set(np.where(labels["gender"]==1)[0]) & set(indices))
 		femaleInd =list( set(np.where(labels["gender"]==0)[0]) & set(indices))
@@ -134,23 +142,29 @@ def printResult(y_pred,compMat,labelsTest):
 	#write file:
 	res.to_csv('submission1.csv',sep=',',index=False)
 
-def votingClassifier(X_train,y_train,X_test,selFeatures):
-	clf1 = ExtraTreesClassifier(n_estimators=200, class_weight='balanced')
-	clf2 = KNeighborsClassifier(n_neighbors=12)
-	clf3 = SVC(gamma='scale', kernel='rbf', probability=True)       
-	eclf = VotingClassifier(estimators=[('dt', clf1), ('knn', clf2), ('svc', clf3)], voting='soft', weights=[2,1,2])
-	clf1 = clf1.fit(X_train.loc[:,selFeatures],y_train)
-	clf2 = clf2.fit(X_train.loc[:,selFeatures],y_train)
-	clf3 = clf3.fit(X_train.loc[:,selFeatures],y_train)
-	eclf = eclf.fit(X_train.loc[:,selFeatures],y_train)
-	y_pred=eclf.predict(X_test.loc[:,selFeatures])
+def classifier(X_train,y_train,X_test,selFeatures,how,seed):
+	if how=='voting':
+		clf1 = ExtraTreesClassifier(n_estimators=200, class_weight='balanced')
+		clf2 = KNeighborsClassifier(n_neighbors=12)
+		clf3 = SVC(gamma='scale', kernel='rbf', probability=True)       
+		eclf = VotingClassifier(estimators=[('dt', clf1), ('knn', clf2), ('svc', clf3)], voting='soft', weights=[2,1,2])
+		clf1 = clf1.fit(X_train.loc[:,selFeatures],y_train)
+		clf2 = clf2.fit(X_train.loc[:,selFeatures],y_train)
+		clf3 = clf3.fit(X_train.loc[:,selFeatures],y_train)
+		eclf = eclf.fit(X_train.loc[:,selFeatures],y_train)
+		y_pred=eclf.predict(X_test.loc[:,selFeatures])
+	elif how=='xg':
+		sumneg=sum(y_train==0)
+		sumpos=sum(y_train==1)
+		xgboost = XGBClassifier(scale_pos_weight=sumneg/sumpos, missing=-1, n_estimators=200, random_state=seed)	
+		xgboost.fit(X_train.loc[:,selFeatures], y_train)
+		y_pred=xgboost.predict(X_test.loc[:,selFeatures])
 	return y_pred
 
 def featureSelection(method,X_train,y_train,trainingNoMismatch,seed):
 	if method=='rl':
 		#feature selection though stability selection
 		#classToPredict could be 1 (sex) or 2 (msi)
-		#trainingNoMismatch['add1']=labelsNoMismatch.iloc[:,anteClass].values.astype(float)
 		rl = RandomizedLasso(alpha='aic', random_state=seed, n_resampling=1000)  #need high resampling to
 		rl.fit(X_train,y_train) #predict sex 1 disease 2
 		scores=rl.scores_
@@ -163,6 +177,12 @@ def featureSelection(method,X_train,y_train,trainingNoMismatch,seed):
 			clf = clf.fit(xx_train, yy_train)
 			scores=np.add(scores,clf.feature_importances_)
 		scores=scores/n_resampling
+	elif method=='xg':
+		sumneg=sum(y_train==0)
+		sumpos=sum(y_train==1)
+		xgboost = XGBClassifier(scale_pos_weight=sumneg/sumpos, missing=-1, n_estimators=200, random_state=seed)        
+		xgboost.fit(X_train, y_train)
+		scores=xgboost.feature_importances_
 
 	names=list(trainingNoMismatch)
         #print "Features sorted by their score:"
@@ -180,7 +200,7 @@ def featureSelection(method,X_train,y_train,trainingNoMismatch,seed):
 training,labels,matching,test,labelsTest=loadData()
 labels,labelsTest=encodeData(labels,labelsTest)
 impute='mean'
-mergeCols=1
+mergeCols=0
 if mergeCols==0:
 	training,test=imputeMissing(impute,training,test)
 
@@ -203,10 +223,12 @@ if mergeCols==1:
 	#print(test.loc[:,"USP9Y"])
 	trainingNoMismatch.reset_index(drop=True, inplace=True)
 	labelsNoMismatch.reset_index(drop=True, inplace=True)
-	x = {'col1': trainingNoMismatch.loc[:,"USP9Y"], 'col2': labelsNoMismatch.loc[:,"gender"], 'col3':  labelsNoMismatch.loc[:,"msi"]}
+	x = {'RPS4Y1': trainingNoMismatch.loc[:,"RPS4Y1"], 'RPS4Y2':trainingNoMismatch.loc[:,"RPS4Y2"],'EIF1AY': trainingNoMismatch.loc[:,'EIF1AY'], \
+		'USP9Y': trainingNoMismatch.loc[:,'USP9Y'], 'DDX3Y':trainingNoMismatch.loc[:,"DDX3Y"], \
+		'gender': labelsNoMismatch.loc[:,"gender"], 'msi': labelsNoMismatch.loc[:,"msi"]}
 	df = pd.DataFrame(data=x)
 	print(df.to_string())
-	print(training.iloc[misMatchInd,:].loc[:,["RPS4Y1", "EIF1AY", "USP9Y"]].to_string())
+	print(training.iloc[misMatchInd,:].loc[:,["RPS4Y1","RPS4Y2" ,"EIF1AY", "USP9Y", "DDX3Y"]].to_string())
 	print(labels.iloc[misMatchInd,:].loc[:,"gender"])
 
 for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
@@ -216,15 +238,18 @@ for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 	elif anteClass==2:
 		classToPredict=1
 		nFeat=30
+	#trainingNoMismatch['add1']=labelsNoMismatch.iloc[:,anteClass].values.astype(float)
 	X_train, X_test, y_train, y_test = train_test_split(trainingNoMismatch, labelsNoMismatch.iloc[:,classToPredict], test_size=0.2, random_state=seed) #42
-	method='rl'
+	method='xg'
 	colNameVecSort=featureSelection(method,X_train,y_train,trainingNoMismatch,seed)
 	
+	print(y_test)
 	scoreVec=[]
 	featVec=[1,2,3,4,5,6,7,8,9,10,15,16,17,18,19,20,30,40,50,60,70,80,90,100]
 	for nFeatures in featVec:
 		selFeatures=colNameVecSort[:nFeatures] #select nFeatures
-		y_pred=votingClassifier(X_train,y_train,X_test,selFeatures)
+		how='xg'
+		y_pred=classifier(X_train,y_train,X_test,selFeatures,how,seed)
 		a=f1_score(y_test,y_pred)
 		scoreVec.append(a)
 
@@ -248,5 +273,7 @@ for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 #new idea to find x chr prot less than 50 missing
 
 #Problems:
-#not same set of features selected
-#Why such low mean for UDP9Y as in 1e-15?
+#not same set of features selected-> ET classifer
+#Why such low mean for UDP9Y as in 1e-15?-> scaling
+#class balance in randomized lasso
+#missing in xgboost
