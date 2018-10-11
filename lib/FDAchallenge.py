@@ -62,12 +62,10 @@ def imputeMissing(impute,training,test):
 		#combined
 		result=pd.concat([training,test])
 		result=result.fillna(result.mean())
-		print(result.shape)
 		result.dropna(axis=1, inplace=True, how='all')
-		result=(result-result.mean())/result.std()
+		#result=(result-result.mean())/result.std()
 		training=result.iloc[:80,:]
 		test    =result.iloc[80:,:]
-		print(training.shape,test.shape)
 		#by protein
 		#training=training.fillna(training.mean(axis=1))
 		#training.dropna(axis=1, inplace=True)
@@ -176,12 +174,15 @@ def featureSelection(method,X_train,y_train,trainingNoMismatch,seed):
 
 	return colNameVecSort
 
-
+###############
 ###Beginning###
+###############
 training,labels,matching,test,labelsTest=loadData()
 labels,labelsTest=encodeData(labels,labelsTest)
 impute='mean'
-training,test=imputeMissing(impute,training,test)
+mergeCols=1
+if mergeCols==0:
+	training,test=imputeMissing(impute,training,test)
 
 #data exploration
 training.max().plot(kind='hist')
@@ -198,6 +199,16 @@ misMatchInd = np.where(matching["mismatch"]==1)[0]
 trainingNoMismatch = training.iloc[indices,:]
 labelsNoMismatch = labels.iloc[indices,:]
 
+if mergeCols==1:
+	#print(test.loc[:,"USP9Y"])
+	trainingNoMismatch.reset_index(drop=True, inplace=True)
+	labelsNoMismatch.reset_index(drop=True, inplace=True)
+	x = {'col1': trainingNoMismatch.loc[:,"USP9Y"], 'col2': labelsNoMismatch.loc[:,"gender"], 'col3':  labelsNoMismatch.loc[:,"msi"]}
+	df = pd.DataFrame(data=x)
+	print(df.to_string())
+	print(training.iloc[misMatchInd,:].loc[:,["RPS4Y1", "EIF1AY", "USP9Y"]].to_string())
+	print(labels.iloc[misMatchInd,:].loc[:,"gender"])
+
 for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 	if anteClass==1:
 		classToPredict=2
@@ -208,7 +219,7 @@ for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 	X_train, X_test, y_train, y_test = train_test_split(trainingNoMismatch, labelsNoMismatch.iloc[:,classToPredict], test_size=0.2, random_state=seed) #42
 	method='rl'
 	colNameVecSort=featureSelection(method,X_train,y_train,trainingNoMismatch,seed)
-
+	
 	scoreVec=[]
 	featVec=[1,2,3,4,5,6,7,8,9,10,15,16,17,18,19,20,30,40,50,60,70,80,90,100]
 	for nFeatures in featVec:
@@ -238,3 +249,4 @@ for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 
 #Problems:
 #not same set of features selected
+#Why such low mean for UDP9Y as in 1e-15?
