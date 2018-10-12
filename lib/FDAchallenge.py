@@ -26,6 +26,7 @@ from itertools import product
 from sklearn.ensemble import VotingClassifier
 from sklearn.model_selection import RandomizedSearchCV, GridSearchCV #Optimize hyperparameters
 from sklearn.model_selection import StratifiedKFold
+import pickle #for saving xgboost models
 
 #change working directory
 os.chdir('/home/marouen/challenges/FDA/data')
@@ -260,22 +261,25 @@ for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 	elif cv=='automatic':
 		#trainingNoMismatch['add1']=labelsNoMismatch.iloc[:,anteClass].values.astype(float)
 		dtrain=xgb.DMatrix(trainingNoMismatch, label=labelsNoMismatch.iloc[:,classToPredict], missing=-1)
-		param = {'sub_sample':0.9, 'silent':1, 'objective':'binary:logitraw','booster':'gbtree'} 
-		num_round = 1000
-		cvResult=xgb.cv(param, dtrain, num_round, nfold=5, seed = 42+seed, fpreproc = fpreproc, feval= xgb_f1, metrics='aucpr')
+		param = {'sub_sample':0.9, 'silent':1, 'objective':'binary:logitraw','booster':'gbtree','num_round':1000} 
+		cvResult=xgb.cv(param, dtrain, nfold=5, seed = 42+seed, fpreproc = fpreproc, feval= xgb_f1, metrics='aucpr')
 		print(cvResult)
 	elif cv=='grid':
 		params = {
         		'min_child_weight': [1, 5, 10],
         		'gamma': [0.5, 1, 1.5, 2, 5],
-        		'subsample': [0.6, 0.8, 1.0],
+        		'subsample': [0.6, 0.8, 0.9, 1.0],
         		'colsample_bytree': [0.6, 0.8, 1.0],
-        		'max_depth': [3, 4, 5],
-			'n_estimators': [200,400,600]
-        		}
-		xgb = XGBClassifier(learning_rate=0.02, objective='binary:logistic', silent=True, nthread=1, missing=-1) #add class imbalance
+        		'max_depth': [3, 4, 5, 6, 7, 8, 9],
+			'n_estimators': [600,1000,3000],
+        		'learning_rate': [0.001,0.01,0.02],
+			'objective': ['binary:logistic', 'binary:logitraw']}
+		# Since startfiedkfold preserves class imbalance we can use balance classes
+		sumneg=sum( labelsNoMismatch.iloc[:,classToPredict] == 0)
+		sumpos=sum( labelsNoMismatch.iloc[:,classToPredict] == 1)
+		xgb = XGBClassifier(silent=True, nthread=1, missing=-1, scale_pos_weight=float(sumneg)/sumpos) #add class imbalance
 		folds = 5
-		param_comb = 10
+		param_comb = 1
 		skf = StratifiedKFold(n_splits=folds, shuffle = True, random_state = seed)
 		random_search = RandomizedSearchCV(xgb, param_distributions=params, n_iter=param_comb, scoring='f1', n_jobs=4, cv=skf.split(trainingNoMismatch,\
 			labelsNoMismatch.iloc[:,classToPredict]), verbose=3, random_state=seed )
@@ -288,6 +292,11 @@ for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 		print(random_search.best_score_ )
 		print('\n Best hyperparameters:')
 		print(random_search.best_params_)
+		random_search.best_params_["bestF1"]=random_search.best_score_
+		results = pd.DataFrame(random_search.best_params_, index=[0])
+		results.to_csv('xgb-random-grid-search-results' + str(classToPredict) +  '.csv')
+		#save best model
+		pickle.dump(random_search.best_score_, open('bestModel' + str(classToPredict), 'wb')) 
 
 
 #To do:
@@ -320,3 +329,7 @@ for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 #look for parameter tha optimizes tp
 #look at john's paper
 
+#xgboost hyperparameters
+#Try fmin
+#try actual random in ranges
+#laod balance
