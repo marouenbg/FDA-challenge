@@ -18,7 +18,7 @@ from sklearn.metrics import matthews_corrcoef
 from sklearn.metrics import f1_score #f1 score
 from sklearn.linear_model import RandomizedLasso #stability selection
 from sklearn import preprocessing
-
+import xgboost as xgb #xgboost python api
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
@@ -63,9 +63,9 @@ def imputeMissing(impute,training,test):
 		#combined
 		result=pd.concat([training,test])
 		#fillna of y proteins by zero
-		#result.loc[:,["RPS4Y1","RPS4Y2","EIF1AY","DDX3Y"]]=result.loc[:,["RPS4Y1","RPS4Y2","EIF1AY","DDX3Y"]].fillna(0) #USP9
+		result.loc[:,["RPS4Y1","RPS4Y2","EIF1AY","DDX3Y"]]=result.loc[:,["RPS4Y1","RPS4Y2","EIF1AY","DDX3Y"]].fillna(0) #USP9
 		#fill the rest by mean
-		result=result.fillna(-1)
+		result=result.fillna(result.mean()) #-1
 		result.dropna(axis=1, inplace=True, how='all')
 		#result=(result-result.mean())/result.std()
 		training=result.iloc[:80,:]
@@ -143,8 +143,8 @@ def classifier(X_train,y_train,X_test,selFeatures,how,seed):
 	elif how=='xg':
 		sumneg=sum(y_train==0)
 		sumpos=sum(y_train==1)
-		xgboost = XGBClassifier(scale_pos_weight=sumneg/sumpos, missing=-1, n_estimators=200, random_state=seed, booster='gbtree',learning_rate=0.01,\
-			max_depth=9, subsample=0.9)	
+		xgboost = XGBClassifier(scale_pos_weight=float(sumneg)/sumpos, missing=-1, n_estimators=200, random_state=seed, booster='gbtree',learning_rate=0.01,\
+			max_depth=9, subsample=0.9, metric=xgb_f1)	
 		xgboost.fit(X_train.loc[:,selFeatures], y_train)
 		y_pred=xgboost.predict(X_test.loc[:,selFeatures])
 	return y_pred
@@ -170,7 +170,7 @@ def featureSelection(method,X_train,y_train,trainingNoMismatch,seed,n_res):
 			xx_train, xx_test, yy_train, yy_test = train_test_split(X_train, y_train, test_size=0.25, random_state=i)
 			sumneg=sum(yy_train==0)
 			sumpos=sum(yy_train==1)
-			xgboost = XGBClassifier(scale_pos_weight=sumneg/sumpos, missing=-1, n_estimators=200, random_state=seed, booster='gbtree',learning_rate=0.01,\
+			xgboost = XGBClassifier(scale_pos_weight=float(sumneg)/sumpos, missing=-1, n_estimators=200, random_state=seed, booster='gbtree',learning_rate=0.01,\
 				max_depth=9, subsample=0.9)        
 			xgboost.fit(xx_train, yy_train)
 			scores=np.add(scores,xgboost.feature_importances_)
@@ -186,12 +186,26 @@ def featureSelection(method,X_train,y_train,trainingNoMismatch,seed,n_res):
 
 	return colNameVecSort
 
+def fpreproc(dtrain, dtest, param):
+    label = dtrain.get_label()
+    ratio = float(np.sum(label == 0)) / np.sum(label==1)
+    param['scale_pos_weight'] = ratio
+    return (dtrain, dtest, param)
+
+def xgb_f1(y,t):
+    t = t.get_label()
+    y_bin = [1. if y_cont > 0.5 else 0. for y_cont in y] # binaryzing your output
+    return 'f1',f1_score(t,y_bin)
+
 ###############
 ###Beginning###
 ###############
 training,labels,matching,test,labelsTest=loadData()
 labels,labelsTest=encodeData(labels,labelsTest)
 impute='mean'
+predictor='xg'
+cvmethod='xg'
+cv='automatic'
 mergeCols=0
 if mergeCols==0:
 	training,test=imputeMissing(impute,training,test)
@@ -223,25 +237,32 @@ for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 		classToPredict=2
 	elif anteClass==2:
 		classToPredict=1
-	nCrossVal=5
-	featVec=[1,2,3,4,5,6,7,8,9,10,15,16,17,18,19,20,30,40,50,60,70,80,90,100,training.shape[1]]
-	scoreVec=np.zeros((nCrossVal,len(featVec)))
-	for i in range(nCrossVal):
-		#trainingNoMismatch['add1']=labelsNoMismatch.iloc[:,anteClass].values.astype(float)
-		X_train, X_test, y_train, y_test = train_test_split(trainingNoMismatch, labelsNoMismatch.iloc[:,classToPredict], test_size=0.2, random_state=i) #42
-		method='xg'
-		n_res=10
-		colNameVecSort=featureSelection(method,X_train,y_train,trainingNoMismatch,seed,n_res)
+	if cv=='manual':
+		nCrossVal=100
+		featVec=[1,2,3,4,5,6,7,8,9,10,15,16,17,18,19,20,30,40,50,60,70,80,90,100,training.shape[1]]
+		scoreVec=np.zeros((nCrossVal,len(featVec)))
+		for i in range(nCrossVal):
+			#trainingNoMismatch['add1']=labelsNoMismatch.iloc[:,anteClass].values.astype(float)
+			X_train, X_test, y_train, y_test = train_test_split(trainingNoMismatch, labelsNoMismatch.iloc[:,classToPredict], test_size=0.2, random_state=i) #42
+			n_res=10
+			colNameVecSort=featureSelection(cvmethod,X_train,y_train,trainingNoMismatch,seed,n_res)
 	
-		print(y_test)
-		for j in range(len(featVec)):
-			selFeatures=colNameVecSort[:featVec[j]] #select nFeatures
-			how='xg'
-			y_pred=classifier(X_train,y_train,X_test,selFeatures,how,seed)
-			a=f1_score(y_test,y_pred)
-			scoreVec[i,j]=a
-	scoreVec=np.mean(scoreVec, axis=0)
-	print(list(zip(featVec,scoreVec)))
+			#print(y_test)
+			for j in range(len(featVec)):
+				selFeatures=colNameVecSort[:featVec[j]] #select nFeatures
+				y_pred=classifier(X_train,y_train,X_test,selFeatures,predictor,seed)
+				a=f1_score(y_test,y_pred)
+				scoreVec[i,j]=a
+		scoreVec=np.mean(scoreVec, axis=0)
+		print(list(zip(featVec,scoreVec)))
+	elif cv=='automatic':
+		dtrain=xgb.DMatrix(trainingNoMismatch, label=labelsNoMismatch.iloc[:,classToPredict], missing=-1)
+		#sumneg=sum(labelsNoMismatch.iloc[:,classToPredict]==0)
+		#sumpos=sum(labelsNoMismatch.iloc[:,classToPredict]==1)
+		param = {'sub_sample':0.9,'max_depth':9, 'eta':0.01, 'silent':1, 'objective':'binary:logitraw'} #change objective
+		num_round = 1000
+		cvResult=xgb.cv(param, dtrain, num_round, nfold=5, seed = 42+seed, fpreproc = fpreproc, feval= xgb_f1) # add f1
+		print(cvResult)
 
 
 #To do:
@@ -270,5 +291,8 @@ for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 #gblinear is better with msiand gbtree with sex
 #seed=42 does not improve with gradient boost, better with imputation to 0
 #try PCA
-#optimize xgboost
-#cross-validation
+#optimize xgboost grid searcch param
+#look for parameter tha optimizes tp
+#try built in crossval of xgboost
+#look at john's paper
+
