@@ -24,6 +24,8 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
 from itertools import product
 from sklearn.ensemble import VotingClassifier
+from sklearn.model_selection import RandomizedSearchCV, GridSearchCV #Optimize hyperparameters
+from sklearn.model_selection import StratifiedKFold
 
 #change working directory
 os.chdir('/home/marouen/challenges/FDA/data')
@@ -205,7 +207,7 @@ labels,labelsTest=encodeData(labels,labelsTest)
 impute='mean'
 predictor='xg'
 cvmethod='xg'
-cv='automatic'
+cv='grid'
 mergeCols=0
 if mergeCols==0:
 	training,test=imputeMissing(impute,training,test)
@@ -262,6 +264,30 @@ for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 		num_round = 1000
 		cvResult=xgb.cv(param, dtrain, num_round, nfold=5, seed = 42+seed, fpreproc = fpreproc, feval= xgb_f1, metrics='aucpr')
 		print(cvResult)
+	elif cv=='grid':
+		params = {
+        		'min_child_weight': [1, 5, 10],
+        		'gamma': [0.5, 1, 1.5, 2, 5],
+        		'subsample': [0.6, 0.8, 1.0],
+        		'colsample_bytree': [0.6, 0.8, 1.0],
+        		'max_depth': [3, 4, 5],
+			'n_estimators': [200,400,600]
+        		}
+		xgb = XGBClassifier(learning_rate=0.02, objective='binary:logistic', silent=True, nthread=1, missing=-1) #add class imbalance
+		folds = 5
+		param_comb = 10
+		skf = StratifiedKFold(n_splits=folds, shuffle = True, random_state = seed)
+		random_search = RandomizedSearchCV(xgb, param_distributions=params, n_iter=param_comb, scoring='f1', n_jobs=4, cv=skf.split(trainingNoMismatch,\
+			labelsNoMismatch.iloc[:,classToPredict]), verbose=3, random_state=seed )
+		random_search.fit(trainingNoMismatch, labelsNoMismatch.iloc[:,classToPredict])
+		print('\n All results:')
+		print(random_search.cv_results_)
+		print('\n Best estimator:')
+		print(random_search.best_estimator_)
+		print('\n Best f1 score for %d-fold search with %d parameter combinations:' % (folds, param_comb))
+		print(random_search.best_score_ )
+		print('\n Best hyperparameters:')
+		print(random_search.best_params_)
 
 
 #To do:
