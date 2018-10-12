@@ -256,12 +256,11 @@ for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 		scoreVec=np.mean(scoreVec, axis=0)
 		print(list(zip(featVec,scoreVec)))
 	elif cv=='automatic':
+		#trainingNoMismatch['add1']=labelsNoMismatch.iloc[:,anteClass].values.astype(float)
 		dtrain=xgb.DMatrix(trainingNoMismatch, label=labelsNoMismatch.iloc[:,classToPredict], missing=-1)
-		#sumneg=sum(labelsNoMismatch.iloc[:,classToPredict]==0)
-		#sumpos=sum(labelsNoMismatch.iloc[:,classToPredict]==1)
-		param = {'sub_sample':0.9,'max_depth':9, 'eta':0.01, 'silent':1, 'objective':'binary:logitraw'} #change objective
+		param = {'sub_sample':0.9, 'silent':1, 'objective':'binary:logitraw','booster':'gbtree'} 
 		num_round = 1000
-		cvResult=xgb.cv(param, dtrain, num_round, nfold=5, seed = 42+seed, fpreproc = fpreproc, feval= xgb_f1) # add f1
+		cvResult=xgb.cv(param, dtrain, num_round, nfold=5, seed = 42+seed, fpreproc = fpreproc, feval= xgb_f1, metrics='aucpr')
 		print(cvResult)
 
 
@@ -293,6 +292,5 @@ for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 #try PCA
 #optimize xgboost grid searcch param
 #look for parameter tha optimizes tp
-#try built in crossval of xgboost
 #look at john's paper
 
