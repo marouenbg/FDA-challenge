@@ -27,6 +27,8 @@ from sklearn.ensemble import VotingClassifier
 from sklearn.model_selection import RandomizedSearchCV, GridSearchCV #Optimize hyperparameters
 from sklearn.model_selection import StratifiedKFold
 import pickle #for saving xgboost models
+from hyperopt import hp, fmin, tpe, STATUS_OK, Trials #fmin
+import gc
 
 #change working directory
 os.chdir('/home/marouen/challenges/FDA/data')
@@ -200,6 +202,23 @@ def xgb_f1(y,t):
     y_bin = [1. if y_cont > 0.5 else 0. for y_cont in y] # binaryzing your output
     return 'f1',f1_score(t,y_bin)
 
+def xgb_f1_fmin(y,t):
+    t = t.get_label()
+    y_bin = [1. if y_cont > 0.5 else 0. for y_cont in y] # binaryzing your output
+    return f1_score(t,y_bin)
+
+def objective(params):
+    num_round = int(params['n_estimators'])
+    del params['n_estimators']
+    watchlist = [(dmtrain, 'train'), (dmvalid, 'valid')]
+    model = xgb.train(params, dmtrain, num_round, watchlist, maximize=True) #, early_stopping_rounds=20, verbose_eval=1)
+    pred = model.predict(dmvalid, ntree_limit=model.best_ntree_limit)
+    f1 = xgb_f1_fmin(pred, dmvalid)
+    del model, pred
+    gc.collect()
+    print(f"SCORE: {f1}")
+    return { 'loss': 1-f1, 'status': STATUS_OK }
+
 ###############
 ###Beginning###
 ###############
@@ -270,7 +289,7 @@ for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
         		'gamma': [0.5, 1, 1.5, 2, 5],
         		'subsample': [0.6, 0.8, 0.9, 1.0],
         		'colsample_bytree': [0.6, 0.8, 1.0],
-        		'max_depth': [3, 4, 5, 6, 7, 8, 9],
+        		'max_depth': [3, 4, 5, 6, 7, 8, 9, 10, 11],
 			'n_estimators': [600,1000,3000],
         		'learning_rate': [0.001,0.01,0.02],
 			'objective': ['binary:logistic', 'binary:logitraw']}
@@ -279,7 +298,7 @@ for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 		sumpos=sum( labelsNoMismatch.iloc[:,classToPredict] == 1)
 		xgb = XGBClassifier(silent=True, nthread=1, missing=-1, scale_pos_weight=float(sumneg)/sumpos) #add class imbalance
 		folds = 5
-		param_comb = 1
+		param_comb = 1000
 		skf = StratifiedKFold(n_splits=folds, shuffle = True, random_state = seed)
 		random_search = RandomizedSearchCV(xgb, param_distributions=params, n_iter=param_comb, scoring='f1', n_jobs=4, cv=skf.split(trainingNoMismatch,\
 			labelsNoMismatch.iloc[:,classToPredict]), verbose=3, random_state=seed )
@@ -297,6 +316,43 @@ for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 		results.to_csv('xgb-random-grid-search-results' + str(classToPredict) +  '.csv')
 		#save best model
 		pickle.dump(random_search.best_score_, open('bestModel' + str(classToPredict), 'wb')) 
+	elif cv=='fmin':
+		# Create binary training and validation files for XGBoost
+		# Not my favourite option because it does not cross-validate, and not sure if it ttok f1 as a metric, will come back
+		dmtrain=xgb.DMatrix(trainingNoMismatch.iloc[:60,:], label=labelsNoMismatch.iloc[:60,classToPredict], missing=-1)
+		dmvalid=xgb.DMatrix(trainingNoMismatch.iloc[60:,:], label=labelsNoMismatch.iloc[60:,classToPredict], missing=-1)
+		space = {
+    			# 'n_estimators': hp.quniform('n_estimators', 200, 600, 50),
+    			'n_estimators': 3, # WARNING: increse number of estimators, e.g. uncomment the above line (it's small for the sake of example)
+    			'eta': hp.quniform('eta', 0.025, 0.25, 0.025),
+    			'max_depth': hp.choice('max_depth', np.arange(1, 14, dtype=int)),
+    			'min_child_weight': hp.quniform('min_child_weight', 1, 10, 1),
+    			'subsample': hp.quniform('subsample', 0.7, 1, 0.05),
+    			'gamma': hp.quniform('gamma', 0.5, 1, 0.05),
+    			'colsample_bytree': hp.quniform('colsample_bytree', 0.7, 1, 0.05),
+    			'alpha' : hp.quniform('alpha', 0, 10, 1),
+    			'lambda': hp.quniform('lambda', 1, 2, 0.1),
+    			'scale_pos_weight': hp.quniform('scale_pos_weight', 50, 200, 10),
+    			'objective': 'binary:logistic',
+    			'feval': 'xgb_f1',
+    			'tree_method': "hist",
+    			'booster': 'gbtree',
+    			'nthread': 4, 
+    			'silent': 1
+		}
+
+		trials = Trials()
+		best = fmin(
+    			fn=objective,
+    			space=space,
+    			algo=tpe.suggest,
+    			max_evals=10, # WARNING: increase number of evaluations (it's small for the sake of example)
+    			trials=trials
+			)
+
+		# best hyperparameters
+		print("\n\n\n The best hyperparameters:")
+		print(best)
 
 
 #To do:
