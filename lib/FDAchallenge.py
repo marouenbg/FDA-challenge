@@ -36,7 +36,7 @@ import gc #fmin
 os.chdir('/home/marouen/challenges/FDA/data')
 
 #Random seed
-seed=142 #142
+seed=142 #142 for the 6 first param set pf xgboost
 random.seed(seed)
 
 #read data files
@@ -286,21 +286,21 @@ for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 		cvResult=xgb.cv(param, dtrain, nfold=5, seed = 42+seed, fpreproc = fpreproc, feval= xgb_f1, metrics='aucpr')
 		print(cvResult)
 	elif cv=='grid':
-		params = { # be careful uniform is lb+range // randint is lb,ub
+		params = { # be careful uniform is lb+range // randint is lb,ub // I don't want to optimize lambda and alpha
         		'min_child_weight': sp_randint(1, 11),
         		'gamma': sp_uniform(0.5, 5.0-0.5),
         		'subsample': sp_uniform(0.6, 1.0-0.6),
         		'colsample_bytree': sp_uniform(0.6, 1.0-0.6),
         		'max_depth': sp_randint(1, 14),
 			'n_estimators': sp_randint(600,3000),
-        		'learning_rate': sp_uniform(0.001, 0.02-0.001),
+        		'learning_rate': sp_uniform(0.001, 0.2-0.001),
 			'objective': ['binary:logistic', 'binary:logitraw']}
 		# Since startfiedkfold preserves class imbalance we can use balance classes
 		sumneg=sum( labelsNoMismatch.iloc[:,classToPredict] == 0)
 		sumpos=sum( labelsNoMismatch.iloc[:,classToPredict] == 1)
 		xgb = XGBClassifier(silent=True, nthread=1, missing=-1, scale_pos_weight=float(sumneg)/sumpos) #add class imbalance
 		folds = 5
-		param_comb = 10
+		param_comb = 3000
 		skf = StratifiedKFold(n_splits=folds, shuffle = True, random_state = seed)
 		random_search = RandomizedSearchCV(xgb, param_distributions=params, n_iter=param_comb, scoring='f1', n_jobs=4, cv=skf.split(trainingNoMismatch,\
 			labelsNoMismatch.iloc[:,classToPredict]), verbose=3, random_state=seed )
