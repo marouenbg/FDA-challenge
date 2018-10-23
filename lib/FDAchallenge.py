@@ -237,8 +237,8 @@ if mergeCols==0:
 	training,test=imputeMissing(impute,training,test)
 
 #data exploration
-training.max().plot(kind='hist')
-training.isna().sum().plot(kind='hist')
+#training.max().plot(kind='hist')
+#training.isna().sum().plot(kind='hist')
 sum(matching["mismatch"])
 
 #remove mismatches for now
