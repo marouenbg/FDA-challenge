@@ -210,6 +210,7 @@ def xgb_f1_fmin(y,t):
     y_bin = [1. if y_cont > 0.5 else 0. for y_cont in y] # binaryzing your output
     return f1_score(t,y_bin)
 
+'''
 def objective(params):
     num_round = int(params['n_estimators'])
     del params['n_estimators']
@@ -221,7 +222,7 @@ def objective(params):
     gc.collect()
     print(f"SCORE: {f1}")
     return { 'loss': 1-f1, 'status': STATUS_OK }
-
+'''
 ###############
 ###Beginning###
 ###############
