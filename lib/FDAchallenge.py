@@ -34,7 +34,7 @@ import gc #fmin
 from sklearn.model_selection import RepeatedStratifiedKFold #repeat kfold
 
 #change working directory
-os.chdir('/home/marouen/challenges/FDA/data')
+os.chdir('../data')
 
 #Random seed
 seed=142 #142 for the 6 first param set pf xgboost
