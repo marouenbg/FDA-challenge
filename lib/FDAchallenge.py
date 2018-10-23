@@ -302,9 +302,11 @@ for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 		sumpos=sum( labelsNoMismatch.iloc[:,classToPredict] == 1)
 		xgb = XGBClassifier(silent=True, nthread=1, missing=-1, scale_pos_weight=float(sumneg)/sumpos) #add class imbalance
 		folds = 5
-		param_comb = 3
-		rskf = RepeatedStratifiedKFold(n_splits=folds, n_repeats=10, random_state = seed)
-		random_search = RandomizedSearchCV(xgb, param_distributions=params, n_iter=param_comb, scoring='f1', n_jobs=4, cv=rskf.split(trainingNoMismatch,\
+		param_comb = 1000
+		n_repeats = 10
+		n_jobs = 8
+		rskf = RepeatedStratifiedKFold(n_splits=folds, n_repeats=n_repeats, random_state = seed)
+		random_search = RandomizedSearchCV(xgb, param_distributions=params, n_iter=param_comb, scoring='f1', n_jobs=n_jobs, cv=rskf.split(trainingNoMismatch,\
 			labelsNoMismatch.iloc[:,classToPredict]), verbose=3, random_state=seed )
 		random_search.fit(trainingNoMismatch, labelsNoMismatch.iloc[:,classToPredict])
 		print('\n All results:')
