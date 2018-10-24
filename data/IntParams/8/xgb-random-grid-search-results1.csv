@@ -1,0 +1,2 @@
+,colsample_bytree,gamma,learning_rate,max_depth,min_child_weight,n_estimators,objective,subsample,bestF1
+0,0.6834035111441458,4.013472356974452,0.17194941557313292,7,2,1133,binary:logistic,0.8195095493113419,0.9205882352941178
