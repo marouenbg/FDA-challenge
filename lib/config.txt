@@ -1,0 +1,19 @@
+Stratified kfold=5
+1: seed SK 142 RS 142  combinations -    gender/msi OK
+2: seed SK 142 RS 142  combinations -    gender/msi OK
+3: seed SK 142 RS 142  combiantions -    gender/msi OK
+4: seed SK 142 RS 142  combiantions -    gender/msi OK
+5: seed SK 142 RS 142  combinations -    gender/msi OK
+6: seed SK 142 RS 142  combinations 3000 gender/msi OK
+7: seed SK 986 RS 986  combiantions 3000        gender/msi NA
+8: seed SK 3091986 RS 3091986 combinations 3000 gender/msi NA
+9: seed SK 142 RS 986
+
+10-Repeated Stratified kfold=5
+10:seed SK 142 RS 986 combinations 3    repeats 10     gender/msi OK
+11:seed SK 142 RS 142 combinations 1000 repeats 10     gender/msi OK
+12:seed SK 142 RS 986 combinations 3000 repeats 10     msi        OK
+13:seed SK 142 RS 986 combinations 3000 repeats 10     gender     OK
+14:seed SK 142 RS 3091986 combinations 3000 repeats 10 msi        OK
+15:seed SK 142 RS 3091986 combiantions 3000 repeats 10 gender     OK
+

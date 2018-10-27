@@ -1,4 +1,4 @@
-*.txt
 *.tsv
 *.png
 *.pdf
+lib/FDAchallenge.py
