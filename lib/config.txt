@@ -12,5 +12,6 @@ Stratified kfold=5
 10-Repeated Stratified kfold=5
 10:seed SK 142 RS 986 combinations 3    repeats 10 gender/msi OK
 11:seed SK 142 RS 142 combinations 1000 repeats 10 gender/msi OK
-12:seed SK 142 RS 986 combiantions 3000 repeats 10 gender     OK
-13:seed SK 142 RS 986 combiantions 3000 repeats 10 msi        OK
+12:seed SK 142 RS 986 combinations 3000 repeats 10 gender     OK
+13:seed SK 142 RS 986 combinations 3000 repeats 10 msi        OK
+14:seed SK 142 RS 3091986 combinations 3000 repeats 10 gender OK
