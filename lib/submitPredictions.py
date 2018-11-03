@@ -57,27 +57,39 @@ def encodeData(labels,labelsTest):
         labels['msi'].replace(['MSI-Low/MSS','MSI-High'],[0,1], inplace=True)
         labelsTest['gender'].replace(['Female','Male'],[0,1], inplace=True)
         labelsTest['msi'].replace(['MSI-Low/MSS','MSI-High'],[0,1], inplace=True)
-        #print(sum(labels[labels['gender'] == 1]['msi'])/sum(labels['gender'] == 1))
-        #print(sum(labels[labels['gender'] == 0]['msi'])/sum(labels['gender'] == 0))
-        #print(sum(labels[labels['msi'] == 1]['gender'])/sum(labels['msi'] == 1))
-        #print(sum(labels[labels['msi'] == 0]['gender'])/sum(labels['msi'] == 0))
         return labels,labelsTest
 
 def imputeMissing(impute,training,test): 
 	if impute=='mean':
-		#for now impute by mean per row (patient) 
-		#as mean by column (protein) yields entire NAN columns -> worth thr try anyway as feature selection
-		#training=training.T.fillna(training.mean(axis=1)).T
 		#combined
 		result=pd.concat([training,test])
 		#fillna of y proteins by zero
-		result.loc[:,["RPS4Y1","RPS4Y2","EIF1AY","DDX3Y"]]=result.loc[:,["RPS4Y1","RPS4Y2","EIF1AY","DDX3Y"]].fillna(-1) #USP9
+		result.loc[:,["RPS4Y1","RPS4Y2","EIF1AY","DDX3Y"]]=result.loc[:,["RPS4Y1","RPS4Y2","EIF1AY","DDX3Y"]].fillna(0) #USP9
 		#fill the rest by mean
-		result=result.fillna(-1) # result.mean()
+		result=result.fillna(result.mean()) # -1
 		result.dropna(axis=1, inplace=True, how='all')
 		#result=(result-result.mean())/result.std()
 		training=result.iloc[:80,:]
 		test    =result.iloc[80:,:]
+	elif impute=='-1butgender':
+		result=pd.concat([training,test])
+		#fillna of y proteins by zero
+		result.loc[:,["RPS4Y1","RPS4Y2","EIF1AY","DDX3Y"]]=result.loc[:,["RPS4Y1","RPS4Y2","EIF1AY","DDX3Y"]].fillna(0) #USP9
+		#fill the rest by mean
+		result=result.fillna(-1)
+		result.dropna(axis=1, inplace=True, how='all')
+		#result=(result-result.mean())/result.std()
+		training=result.iloc[:80,:]
+		test    =result.iloc[80:,:]
+	elif impute='-1':
+                result=pd.concat([training,test])
+                #fillna of y proteins by zero
+                #fill the rest by mean
+                result=result.fillna(-1)
+                result.dropna(axis=1, inplace=True, how='all')
+                #result=(result-result.mean())/result.std()
+                training=result.iloc[:80,:]
+                test    =result.iloc[80:,:]
 	return training,test
 
 def predictCompetition(trainingNoMismatch,labelsNoMismatch,classToPredict,compMat,labelsTest,params):
@@ -106,30 +118,35 @@ def printResult(compMat,labelsTest,submission):
         #write file:
         res.to_csv('./predictions/'+submission+'/submission'+submission+'.csv',sep=',',index=False)
 
-#remove mismatches for now
-training,labels,matching,test,labelsTest=loadData()
-impute='mean'
-training,test=imputeMissing(impute,training,test)
-
-#fill missing
-labels,labelsTest=encodeData(labels,labelsTest)
-indices = np.where(matching["mismatch"]==0)[0]
-misMatchInd = np.where(matching["mismatch"]==1)[0]
-trainingNoMismatch = training.iloc[indices,:]
-labelsNoMismatch = labels.iloc[indices,:]
-
-#generate prediction data
-compMat=np.zeros([len(labelsTest),4])
-compMat[:,2:4]=labelsTest.iloc[:,1:3]
-
 for submission in [1,2]:
+	#remove mismatches for now
+	training,labels,matching,test,labelsTest=loadData()
+	if submission in [1,2]:
+		impute='mean'
+	else:
+		impute='-1butgender'
+	else:
+		impute='-1'
+
+	training,test=imputeMissing(impute, training, test)
+	#fill missing
+	labels,labelsTest=encodeData(labels,labelsTest)
+	indices = np.where(matching["mismatch"]==0)[0]
+	misMatchInd = np.where(matching["mismatch"]==1)[0]
+	trainingNoMismatch = training.iloc[indices,:]
+	labelsNoMismatch = labels.iloc[indices,:]
+
+	#generate prediction data
+	compMat=np.zeros([len(labelsTest),4])
+	compMat[:,2:4]=labelsTest.iloc[:,1:3]
+
 	for classToPredict in [1,2]:
 		if submission==1:
 			folder1='11'
 			folder2='11'
 		elif submission==2:
 			folder1='6'
-			folder2='7'
+			folder2='6'
 		if classToPredict==1:
 			params=pd.read_csv("../data/IntParams/"+folder1+"/xgb-random-grid-search-results1.csv")
 		else:

@@ -1,3 +1,4 @@
+I - Imputation by mean and zeros in sex proteins
 Stratified kfold=5
 1: seed SK 142 RS 142  combinations -    gender/msi OK
 2: seed SK 142 RS 142  combinations -    gender/msi OK
@@ -5,7 +6,7 @@ Stratified kfold=5
 4: seed SK 142 RS 142  combiantions -    gender/msi OK
 5: seed SK 142 RS 142  combinations -    gender/msi OK
 6: seed SK 142 RS 142  combinations 3000 gender/msi OK
-7: seed SK 986 RS 986  combiantions 3000        gender/msi NA
+7: seed SK 986 RS 986  combinations 3000        gender/msi NA can't compare because not same split (different seed for split)
 8: seed SK 3091986 RS 3091986 combinations 3000 gender/msi NA
 9: seed SK 142 RS 986
 
@@ -19,5 +20,6 @@ Stratified kfold=5
 16:seed SK 142 RS 142     combinations 7000 repeats 10 msi        OK
 17:seed SK 142 RS 142     combinations 7000 repeats 10 gender     OK
 
-18-seed SK 142 RS 142     combinations 7000 repeats 10 gender     OK
-19-seed SK 142 RS 142     combiantions 7000 repeats 10 msi        OK
+II - Imputation by missing values and zeros in sex proteins
+18-seed SK 142 RS 142     combinations 3000 repeats 10 gender     OK
+19-seed SK 142 RS 142     combiantions 3000 repeats 10 msi        OK

@@ -1,3 +1,13 @@
 Round1
+I- imputation mean and 0 in sex proteins
 1-best 10repeat-5fold CV (gender model 11, msi model 11)
-2-best 5 fold CV
+2-best 5 fold CV (gender model 6, msi model 6)
+
+II- imputation missing and 0 in sex proteins
+
+
+Ideas:
+1-include training mismatch
+2-select top 12 
+3-take out 0 in sex protein
+4-scale weight
