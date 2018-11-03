@@ -73,7 +73,7 @@ def imputeMissing(impute,training,test):
 		#fillna of y proteins by zero
 		result.loc[:,["RPS4Y1","RPS4Y2","EIF1AY","DDX3Y"]]=result.loc[:,["RPS4Y1","RPS4Y2","EIF1AY","DDX3Y"]].fillna(0) #USP9
 		#fill the rest by mean
-		result=result.fillna(result.mean()) #-1
+		result=result.fillna(-1) # result.mean()
 		result.dropna(axis=1, inplace=True, how='all')
 		#result=(result-result.mean())/result.std()
 		training=result.iloc[:80,:]
@@ -113,29 +113,30 @@ def imputeMissing(impute,training,test):
 		#BONUS: do all of the above in pandas
 	return training,test
 
-def predictCompetition(rl,trainingNoMismatch,labelsNoMismatch,classToPredict,names,compMat,labelsTest):
-	compMat=np.zeros([len(labelsTest),4])
-	compMat[:,2:4]=labelsTest.iloc[:,1:3]
-	rl.fit(trainingNoMismatch.loc[:,selFeatures], labelsNoMismatch.iloc[:,classToPredict]) #predict sex 1 disease 2
-	vecSort=sorted(zip(map(lambda x: round(x, 4), rl.scores_), names), reverse=True)
-	colNameVecSort=[x[1] for x in vecSort]
-	selFeatures=colNameVecSort[0:nFeatures]
+def predictCompetition(trainingNoMismatch,labelsNoMismatch,classToPredict,compMat,labelsTest,params):
+	#rl.fit(trainingNoMismatch.loc[:,selFeatures], labelsNoMismatch.iloc[:,classToPredict]) #predict sex 1 disease 2
+	#vecSort=sorted(zip(map(lambda x: round(x, 4), rl.scores_), names), reverse=True)
+	#colNameVecSort=[x[1] for x in vecSort]
+	#selFeatures=colNameVecSort[0:nFeatures]
 	sumneg=sum(labelsNoMismatch.iloc[:,classToPredict]==0)
-	sumpos=sum(labelsNoMismathc.iloc[:,classToPredict]==1)
-	xgboost = XGBClassifier(scale_pos_weight=sumneg/sumpos)
-	xgboost.fit(trainingNoMismatch.loc[:,selFeatures], labelsNoMismatch.iloc[:,classToPredict])
-	y_pred=xgboost.predict(test.loc[:,selFeatures])
+	sumpos=sum(labelsNoMismatch.iloc[:,classToPredict]==1)
+	params['missing']=-1
+	params['scale_pos_weight']=sumneg/sumpos
+	xgboost = XGBClassifier(**params)
+	xgboost.fit(trainingNoMismatch, labelsNoMismatch.iloc[:,classToPredict])
+	y_pred=xgboost.predict(test)
 	compMat[:,classToPredict-1]=y_pred
 
-def printResult(y_pred,compMat,labelsTest):
+def printResult(compMat,labelsTest):
 	res=labelsTest.iloc[:,:1]
 	res["mismatch"]=0
-	for i in range(len(y_pred)):
-		if(compMat[i,0] != compMat[i,2]) & (compMat[i,1] != compMat[i,3]):
+	for i in range(compMat.shape[0]):
+		if(compMat[i,0] != compMat[i,2]) | (compMat[i,1] != compMat[i,3]):
 			res.iloc[i,1]=1
-
+	#print(compMat)
+	print(sum(res['mismatch']))
 	#write file:
-	res.to_csv('submission1.csv',sep=',',index=False)
+	res.to_csv('./predictions/1/submission1.csv',sep=',',index=False)
 
 def classifier(X_train,y_train,X_test,selFeatures,how,seed):
 	if how=='voting':
@@ -231,7 +232,7 @@ labels,labelsTest=encodeData(labels,labelsTest)
 impute='mean'
 predictor='xg'
 cvmethod='xg'
-cv='grid'
+cv='predictCompetition'
 mergeCols=0
 if mergeCols==0:
 	training,test=imputeMissing(impute,training,test)
@@ -246,6 +247,10 @@ indices = np.where(matching["mismatch"]==0)[0]
 misMatchInd = np.where(matching["mismatch"]==1)[0]
 trainingNoMismatch = training.iloc[indices,:]
 labelsNoMismatch = labels.iloc[indices,:]
+
+#generate prediction data
+compMat=np.zeros([len(labelsTest),4])
+compMat[:,2:4]=labelsTest.iloc[:,1:3]
 
 if mergeCols==1:
 	trainingNoMismatch.reset_index(drop=True, inplace=True)
@@ -359,7 +364,19 @@ for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 		# best hyperparameters
 		print("\n\n\n The best hyperparameters:")
 		print(best)
+	elif cv=='predictCompetition':
+		if classToPredict==1:
+			params=pd.read_csv("../data/IntParams/11/xgb-random-grid-search-results1.csv")
+		else:
+			params=pd.read_csv("../data/IntParams/11/xgb-random-grid-search-results2.csv")
+		
+		params=params.to_dict('records')[0]
+		params.pop('bestF1',None)
+		params.pop('Unnamed: 0',None)
+		predictCompetition(trainingNoMismatch,labelsNoMismatch,classToPredict,compMat,labelsTest,params)
 
+#print results
+printResult(compMat,labelsTest)
 
 #To do:
 #How to combine binary and continous features
