@@ -307,7 +307,7 @@ for anteClass in [2]: #2 is predicting sex,1 is predicting msi
 		n_jobs = 96
 		rskf = RepeatedStratifiedKFold(n_splits=folds, n_repeats=n_repeats, random_state = seed)
 		random_search = RandomizedSearchCV(xgb, param_distributions=params, n_iter=param_comb, scoring='f1', n_jobs=n_jobs, cv=rskf.split(trainingNoMismatch,\
-			labelsNoMismatch.iloc[:,classToPredict]), verbose=3, random_state=3091986 )
+			labelsNoMismatch.iloc[:,classToPredict]), verbose=3, random_state=seed )
 		random_search.fit(trainingNoMismatch, labelsNoMismatch.iloc[:,classToPredict])
 		print('\n All results:')
 		print(random_search.cv_results_)
