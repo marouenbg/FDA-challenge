@@ -4,8 +4,9 @@ I- imputation mean and 0 in sex proteins
 2-best 5 fold CV (gender model 6, msi model 6)
 
 II- imputation missing and 0 in sex proteins
-
+3- 18 + 19
 III- imputation missing
+4- 20 + 21
 
 Ideas:
 1-include training mismatch

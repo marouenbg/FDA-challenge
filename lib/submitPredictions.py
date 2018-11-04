@@ -92,7 +92,7 @@ def imputeMissing(impute,training,test):
                 test    =result.iloc[80:,:]
 	return training,test
 
-def predictCompetition(trainingNoMismatch,labelsNoMismatch,classToPredict,compMat,labelsTest,params):
+def predictCompetition(trainingNoMismatch,labelsNoMismatch,classToPredict,compMat,labelsTest,params,training,misMatchInd,test,submission):
         #rl.fit(trainingNoMismatch.loc[:,selFeatures], labelsNoMismatch.iloc[:,classToPredict]) #pre$
         #vecSort=sorted(zip(map(lambda x: round(x, 4), rl.scores_), names), reverse=True)
         #colNameVecSort=[x[1] for x in vecSort]
@@ -101,34 +101,41 @@ def predictCompetition(trainingNoMismatch,labelsNoMismatch,classToPredict,compMa
 	sumpos=sum(labelsNoMismatch.iloc[:,classToPredict]==1)
 	params['missing']=-1
 	params['scale_pos_weight']=sumneg/sumpos
-	print(params)
 	xgboost = XGBClassifier(**params)
 	xgboost.fit(trainingNoMismatch, labelsNoMismatch.iloc[:,classToPredict])
+	#y_pred=xgboost.predict(training.iloc[misMatchInd,:])
+	#probs=xgboost.predict_proba(training.iloc[misMatchInd,:])
 	y_pred=xgboost.predict(test)
 	probs=xgboost.predict_proba(test)
 	#print(y_pred)
 	#print(probs)
+	#The following is basically saying that if the prediciton of mismatch in msi is not highlyy cofnirmed
+	#then assume a mtach because mismatches are ony 15% of the data ~ around 12 case
+	if submission==5 & classToPredict==2:
+		for i in range(compMat.shape[0]):
+			if y_pred[i] != compMat[i,3] & abs(probs[i][0]-probs[i][1])<0.4:
+				y_pred[i]=compMat[i,3]
 	compMat[:,classToPredict-1]=y_pred
 
 def printResult(compMat,labelsTest,submission):
 	res=labelsTest.iloc[:,:1]
 	res["mismatch"]=0
 	for i in range(compMat.shape[0]):
-		if(compMat[i,1] != compMat[i,3]): # | (compMat[i,1] != compMat[i,3]):
+		if(compMat[i,0] != compMat[i,2]) | (compMat[i,1] != compMat[i,3]):
 			res.iloc[i,1]=1
 	#print(compMat)
 	print(sum(res['mismatch']))
 	#write file:
 	res.to_csv('./predictions/'+submission+'/submission'+submission+'.csv',sep=',',index=False)
 
-for submission in [1,2]:
+for submission in [1,2,3,4,5]:
 	#remove mismatches for now
 	training,labels,matching,test,labelsTest=loadData()
-	if submission in [1,2]:
+	if submission in [1,2,5]:
 		impute='mean'
-	elif submission=='undefined':
+	elif submission==3:
 		impute='-1butgender'
-	else:
+	elif submission==4:
 		impute='-1'
 
 	training,test=imputeMissing(impute, training, test)
@@ -142,6 +149,7 @@ for submission in [1,2]:
 	#generate prediction data
 	compMat=np.zeros([len(labelsTest),4])
 	compMat[:,2:4]=labelsTest.iloc[:,1:3]
+	#print(labels.iloc[misMatchInd,:])
 
 	for classToPredict in [1,2]:
 		if submission==1:
@@ -150,6 +158,12 @@ for submission in [1,2]:
 		elif submission==2:
 			folder1='6'
 			folder2='6'
+		elif submission==3:
+			folder1='18'
+			folder2='19'
+		elif submission==4:
+			folder1='20'
+			folder2='21'
 		if classToPredict==1:
 			params=pd.read_csv("../data/IntParams/"+folder1+"/xgb-random-grid-search-results1.csv")
 		else:
@@ -158,7 +172,7 @@ for submission in [1,2]:
 		params=params.to_dict('records')[0]
 		params.pop('bestF1',None)
 		params.pop('Unnamed: 0',None)
-		predictCompetition(trainingNoMismatch,labelsNoMismatch,classToPredict,compMat,labelsTest,params)
+		predictCompetition(trainingNoMismatch,labelsNoMismatch,classToPredict,compMat,labelsTest,params,training,misMatchInd,test,submission)
 
 	#print results
 	printResult(compMat,labelsTest,str(submission))

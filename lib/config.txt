@@ -24,6 +24,6 @@ II - Imputation by missing values and zeros in sex proteins
 18-seed SK 142 RS 142     combinations 3000 repeats 10 gender     OK
 19-seed SK 142 RS 142     combiantions 3000 repeats 10 msi        OK
 
-III-
-20-gender
-21-msi
+III- Imputation by missing value alone 
+20-seed SK 142 RS 142     combinations 3000 repeats 10 gender     OK
+21-seed SK 142 RS 142     combinations 3000 repeats 10 msi        OK
