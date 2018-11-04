@@ -71,7 +71,7 @@ def imputeMissing(impute,training,test):
 		#combined
 		result=pd.concat([training,test])
 		#fillna of y proteins by zero
-		result.loc[:,["RPS4Y1","RPS4Y2","EIF1AY","DDX3Y"]]=result.loc[:,["RPS4Y1","RPS4Y2","EIF1AY","DDX3Y"]].fillna(0) #USP9
+		#result.loc[:,["RPS4Y1","RPS4Y2","EIF1AY","DDX3Y"]]=result.loc[:,["RPS4Y1","RPS4Y2","EIF1AY","DDX3Y"]].fillna(-1) #USP9
 		#fill the rest by mean
 		result=result.fillna(-1) #-1
 		result.dropna(axis=1, inplace=True, how='all')
