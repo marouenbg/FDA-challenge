@@ -5,9 +5,9 @@ I- imputation mean and 0 in sex proteins
 
 II- imputation missing and 0 in sex proteins
 
+III- imputation missing
 
 Ideas:
 1-include training mismatch
 2-select top 12 
-3-take out 0 in sex protein
 4-scale weight

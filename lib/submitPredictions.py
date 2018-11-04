@@ -81,7 +81,7 @@ def imputeMissing(impute,training,test):
 		#result=(result-result.mean())/result.std()
 		training=result.iloc[:80,:]
 		test    =result.iloc[80:,:]
-	elif impute='-1':
+	elif impute=='-1':
                 result=pd.concat([training,test])
                 #fillna of y proteins by zero
                 #fill the rest by mean
@@ -105,25 +105,28 @@ def predictCompetition(trainingNoMismatch,labelsNoMismatch,classToPredict,compMa
 	xgboost = XGBClassifier(**params)
 	xgboost.fit(trainingNoMismatch, labelsNoMismatch.iloc[:,classToPredict])
 	y_pred=xgboost.predict(test)
+	probs=xgboost.predict_proba(test)
+	#print(y_pred)
+	#print(probs)
 	compMat[:,classToPredict-1]=y_pred
 
 def printResult(compMat,labelsTest,submission):
-        res=labelsTest.iloc[:,:1]
-        res["mismatch"]=0
-        for i in range(compMat.shape[0]):
-                if(compMat[i,0] != compMat[i,2]) | (compMat[i,1] != compMat[i,3]):
-                        res.iloc[i,1]=1
-        #print(compMat)
-        print(sum(res['mismatch']))
-        #write file:
-        res.to_csv('./predictions/'+submission+'/submission'+submission+'.csv',sep=',',index=False)
+	res=labelsTest.iloc[:,:1]
+	res["mismatch"]=0
+	for i in range(compMat.shape[0]):
+		if(compMat[i,1] != compMat[i,3]): # | (compMat[i,1] != compMat[i,3]):
+			res.iloc[i,1]=1
+	#print(compMat)
+	print(sum(res['mismatch']))
+	#write file:
+	res.to_csv('./predictions/'+submission+'/submission'+submission+'.csv',sep=',',index=False)
 
 for submission in [1,2]:
 	#remove mismatches for now
 	training,labels,matching,test,labelsTest=loadData()
 	if submission in [1,2]:
 		impute='mean'
-	else:
+	elif submission=='undefined':
 		impute='-1butgender'
 	else:
 		impute='-1'
