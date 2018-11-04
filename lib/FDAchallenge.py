@@ -71,7 +71,7 @@ def imputeMissing(impute,training,test):
 		#combined
 		result=pd.concat([training,test])
 		#fillna of y proteins by zero
-		result.loc[:,["RPS4Y1","RPS4Y2","EIF1AY","DDX3Y"]]=result.loc[:,["RPS4Y1","RPS4Y2","EIF1AY","DDX3Y"]].fillna(0) #USP9
+		#result.loc[:,["RPS4Y1","RPS4Y2","EIF1AY","DDX3Y"]]=result.loc[:,["RPS4Y1","RPS4Y2","EIF1AY","DDX3Y"]].fillna(-1) #USP9
 		#fill the rest by mean
 		result=result.fillna(-1) # result.mean()
 		result.dropna(axis=1, inplace=True, how='all')
@@ -263,6 +263,7 @@ if mergeCols==1:
 	print(training.iloc[misMatchInd,:].loc[:,["RPS4Y1","RPS4Y2" ,"EIF1AY", "USP9Y", "DDX3Y"]].to_string())
 	print(labels.iloc[misMatchInd,:].loc[:,"gender"])
 
+for anteClass in [2]: #2 is predicting sex,1 is predicting msi
 for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 	if anteClass==1:
 		classToPredict=2
@@ -307,8 +308,10 @@ for anteClass in [2,1]: #2 is predicting sex,1 is predicting msi
 		sumpos=sum( labelsNoMismatch.iloc[:,classToPredict] == 1)
 		xgb = XGBClassifier(silent=True, nthread=1, missing=-1, scale_pos_weight=float(sumneg)/sumpos) #add class imbalance
 		folds = 5
+		param_comb = 3000
 		param_comb = 1000
 		n_repeats = 10
+		n_jobs = 24
 		n_jobs = 8
 		rskf = RepeatedStratifiedKFold(n_splits=folds, n_repeats=n_repeats, random_state = seed)
 		random_search = RandomizedSearchCV(xgb, param_distributions=params, n_iter=param_comb, scoring='f1', n_jobs=n_jobs, cv=rskf.split(trainingNoMismatch,\
