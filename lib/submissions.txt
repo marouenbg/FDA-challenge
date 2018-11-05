@@ -8,7 +8,13 @@ II- imputation missing and 0 in sex proteins
 III- imputation missing
 4- 20 + 21
 
+5-gender only of 1
+6-gender only of 3
+7-msi only of 2
+8-msi only of 4
+
 Ideas:
 1-include training mismatch
 2-select top 12 
 4-scale weight
+

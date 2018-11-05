@@ -111,31 +111,39 @@ def predictCompetition(trainingNoMismatch,labelsNoMismatch,classToPredict,compMa
 	#print(probs)
 	#The following is basically saying that if the prediciton of mismatch in msi is not highlyy cofnirmed
 	#then assume a mtach because mismatches are ony 15% of the data ~ around 12 case
-	if submission==5 & classToPredict==2:
-		for i in range(compMat.shape[0]):
-			if y_pred[i] != compMat[i,3] & abs(probs[i][0]-probs[i][1])<0.4:
-				y_pred[i]=compMat[i,3]
+	#if submission==5 & classToPredict==2:
+	#	for i in range(compMat.shape[0]):
+	#		if y_pred[i] != compMat[i,3] & abs(probs[i][0]-probs[i][1])<0.4:
+	#			y_pred[i]=compMat[i,3]
 	compMat[:,classToPredict-1]=y_pred
 
 def printResult(compMat,labelsTest,submission):
 	res=labelsTest.iloc[:,:1]
 	res["mismatch"]=0
 	for i in range(compMat.shape[0]):
-		if(compMat[i,0] != compMat[i,2]) | (compMat[i,1] != compMat[i,3]):
-			res.iloc[i,1]=1
+		if submission in ['5','6']:
+			if(compMat[i,0] != compMat[i,2]): #gender
+				res.iloc[i,1]=1
+		elif submission in ['7','8']:
+                        if(compMat[i,1] != compMat[i,3]): #msi
+                                res.iloc[i,1]=1
+		else:
+                        if(compMat[i,0] != compMat[i,2]) | (compMat[i,1] != compMat[i,3]):
+                                res.iloc[i,1]=1
+
 	#print(compMat)
 	print(sum(res['mismatch']))
 	#write file:
 	res.to_csv('./predictions/'+submission+'/submission'+submission+'.csv',sep=',',index=False)
 
-for submission in [1,2,3,4,5]:
+for submission in [1,2,3,4,5,6,7,8]:
 	#remove mismatches for now
 	training,labels,matching,test,labelsTest=loadData()
-	if submission in [1,2,5]:
+	if submission in [1,2,5,7]:
 		impute='mean'
-	elif submission==3:
+	elif submission in [3]:
 		impute='-1butgender'
-	elif submission==4:
+	elif submission in [4,6,8]:
 		impute='-1'
 
 	training,test=imputeMissing(impute, training, test)
@@ -152,16 +160,16 @@ for submission in [1,2,3,4,5]:
 	#print(labels.iloc[misMatchInd,:])
 
 	for classToPredict in [1,2]:
-		if submission==1:
+		if submission in [1,5]:
 			folder1='11'
 			folder2='11'
-		elif submission==2:
+		elif submission in [2,7]:
 			folder1='6'
 			folder2='6'
-		elif submission==3:
+		elif submission in [3]:
 			folder1='18'
 			folder2='19'
-		elif submission==4:
+		elif submission in [4,6,8]:
 			folder1='20'
 			folder2='21'
 		if classToPredict==1:
