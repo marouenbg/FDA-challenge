@@ -9,9 +9,12 @@ III- imputation missing
 4- 20 + 21
 
 5-gender only of 1
-6-gender only of 3
+6-gender only of 4
 7-msi only of 2
 8-msi only of 4
+
+9-gender and msi threshold 0.4 on submission3
+10-gender and msi trhehsold 0.6 on submission2
 
 Ideas:
 1-include training mismatch

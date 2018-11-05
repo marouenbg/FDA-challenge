@@ -111,10 +111,14 @@ def predictCompetition(trainingNoMismatch,labelsNoMismatch,classToPredict,compMa
 	#print(probs)
 	#The following is basically saying that if the prediciton of mismatch in msi is not highlyy cofnirmed
 	#then assume a mtach because mismatches are ony 15% of the data ~ around 12 case
-	#if submission==5 & classToPredict==2:
-	#	for i in range(compMat.shape[0]):
-	#		if y_pred[i] != compMat[i,3] & abs(probs[i][0]-probs[i][1])<0.4:
-	#			y_pred[i]=compMat[i,3]
+	if (submission==9) & (classToPredict==2):
+		for i in range(compMat.shape[0]):
+			if (y_pred[i] != compMat[i,3]) & (abs(probs[i][0]-probs[i][1])<0.4):
+				y_pred[i]=compMat[i,3]
+	if (submission==10) & (classToPredict==2):
+		for i in range(compMat.shape[0]):
+			if (y_pred[i] != compMat[i,3]) & (abs(probs[i][0]-probs[i][1])<0.6):
+				y_pred[i]=compMat[i,3]
 	compMat[:,classToPredict-1]=y_pred
 
 def printResult(compMat,labelsTest,submission):
@@ -136,12 +140,12 @@ def printResult(compMat,labelsTest,submission):
 	#write file:
 	res.to_csv('./predictions/'+submission+'/submission'+submission+'.csv',sep=',',index=False)
 
-for submission in [1,2,3,4,5,6,7,8]:
+for submission in [1,2,3,4,5,6,7,8,9,10]:
 	#remove mismatches for now
 	training,labels,matching,test,labelsTest=loadData()
-	if submission in [1,2,5,7]:
+	if submission in [1,2,5,7,10]:
 		impute='mean'
-	elif submission in [3]:
+	elif submission in [3,9]:
 		impute='-1butgender'
 	elif submission in [4,6,8]:
 		impute='-1'
@@ -163,10 +167,10 @@ for submission in [1,2,3,4,5,6,7,8]:
 		if submission in [1,5]:
 			folder1='11'
 			folder2='11'
-		elif submission in [2,7]:
+		elif submission in [2,7,10]:
 			folder1='6'
 			folder2='6'
-		elif submission in [3]:
+		elif submission in [3,9]:
 			folder1='18'
 			folder2='19'
 		elif submission in [4,6,8]:
