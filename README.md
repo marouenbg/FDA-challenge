@@ -43,4 +43,4 @@ submission 8: Only the msi classifier from submission 4.
 
 submission 9: Applied threshold for classification in submission 3.
 
-submission 10:Applied threshold for classification in submission 2.
+submission 10: Applied threshold for classification in submission 2.
