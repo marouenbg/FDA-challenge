@@ -1,4 +1,4 @@
-This is my solution for the FDA sample mislabeling challenge
+This is my solution (ranked 25/51) for the FDA sample mislabeling challenge
 https://precision.fda.gov/challenges/4
 
 The main challenge with the prediction of mismatched samples and clinical data was the high
